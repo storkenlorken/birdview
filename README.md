@@ -3,8 +3,6 @@
 ### Ever wondered where all your storage went?
 BirdView is a snappy, macOS-inspired dashboard that helps you hunt down space-hogs on your Unraid server (or any home server). It scans your drives, categorizes your junk, and tracks how your storage grows over time.
 
-![BirdView Screenshot](https://raw.githubusercontent.com/storkenlorken/birdview/main/screenshots/dashboard.png)
-
 ## Why you'll love it
 *   **Fast as heck**: Written in Go, so it rips through millions of files in seconds.
 *   **Eye Candy**: A beautiful frosted glass UI that actually looks good in 2024.
