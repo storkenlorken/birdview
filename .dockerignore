@@ -1,0 +1,27 @@
+# Version Control
+.git
+.gitignore
+
+# Dependencies
+node_modules
+frontend/node_modules
+backend/vendor
+
+# Build output
+dist
+frontend/dist
+backend/server
+
+# Environment variables
+.env
+.env.local
+
+# IDEs and Editors
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store

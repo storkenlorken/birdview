@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  birdview:
+    build: .
+    container_name: birdview
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Change this to the actual directory you want to scan on your host
+      - /path/to/your/data:/data:ro
+      # Persistent volume for BirdView's database and settings
+      - birdview_data:/app/data
+    environment:
+      - TZ=UTC
+      - PORT=8080
+      - PUID=99
+      - PGID=100
+
+volumes:
+  birdview_data:
