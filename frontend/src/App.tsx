@@ -418,7 +418,7 @@ function Dashboard() {
   const currentFolder = data.folders.find(f => f.path === currentPath) || { sizeBytes: data.snapshot.totalSizeBytes };
 
   return (
-    <div key={currentPath} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+    <div key={currentPath} className="space-y-8 animate-fade-slide-up pb-12">
       <div className="glass rounded-2xl p-6 sm:p-8 space-y-6">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
