@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -48,10 +49,21 @@ func main() {
 
 	// Initialize Scanner and Scheduler
 	scanService := scanner.NewScanner(database)
-	sched := scheduler.NewScheduler(scanService)
+	sched := scheduler.NewScheduler(scanService, database)
 	
-	// Start scheduler (runs every 6 hours by default)
-	sched.Start(6*time.Hour, dataPath)
+	// Get scan interval from env (default to 7 days)
+	intervalDays := 7
+	if envDays := os.Getenv("BIRDVIEW_SCAN_INTERVAL_DAYS"); envDays != "" {
+		if val, err := strconv.Atoi(envDays); err == nil && val > 0 {
+			intervalDays = val
+		}
+	}
+	
+	scanInterval := time.Duration(intervalDays) * 24 * time.Hour
+	log.Printf("Starting scheduler with interval: %v days (%v)", intervalDays, scanInterval)
+
+	// Start scheduler
+	sched.Start(scanInterval, dataPath)
 	defer sched.Stop()
 
 	// Initialize API

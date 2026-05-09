@@ -4,33 +4,51 @@ import (
 	"log"
 	"time"
 
+	"github.com/jmoiron/sqlx"
+	"github.com/storkenlorken/birdview/internal/models"
 	"github.com/storkenlorken/birdview/internal/scanner"
 )
 
 type Scheduler struct {
 	scanner *scanner.Scanner
+	db      *sqlx.DB
 	ticker  *time.Ticker
 	quit    chan struct{}
 }
 
-func NewScheduler(s *scanner.Scanner) *Scheduler {
+func NewScheduler(s *scanner.Scanner, db *sqlx.DB) *Scheduler {
 	return &Scheduler{
 		scanner: s,
+		db:      db,
 		quit:    make(chan struct{}),
 	}
 }
 
 func (s *Scheduler) Start(interval time.Duration, dataPath string) {
-	s.ticker = time.NewTicker(interval)
 	go func() {
-		// Run an initial scan immediately
-		log.Println("Running initial scan...")
-		if err := s.scanner.RunScan(dataPath); err != nil {
-			log.Printf("Initial scan failed: %v", err)
-		} else {
-			log.Println("Initial scan completed successfully.")
+		// Check if we already have a recent scan in the DB
+		var lastSnapshot models.Snapshot
+		err := s.db.Get(&lastSnapshot, "SELECT * FROM snapshots ORDER BY timestamp DESC LIMIT 1")
+		
+		shouldScanNow := true
+		if err == nil {
+			timeSinceLastScan := time.Since(lastSnapshot.Timestamp)
+			if timeSinceLastScan < interval {
+				log.Printf("Last scan was %v ago (Interval: %v). Skipping startup scan.", timeSinceLastScan.Round(time.Minute), interval)
+				shouldScanNow = false
+			}
 		}
 
+		if shouldScanNow {
+			log.Println("Running initial scan...")
+			if err := s.scanner.RunScan(dataPath); err != nil {
+				log.Printf("Initial scan failed: %v", err)
+			} else {
+				log.Println("Initial scan completed successfully.")
+			}
+		}
+
+		s.ticker = time.NewTicker(interval)
 		for {
 			select {
 			case <-s.ticker.C:
@@ -41,7 +59,9 @@ func (s *Scheduler) Start(interval time.Duration, dataPath string) {
 					log.Println("Scheduled scan completed successfully.")
 				}
 			case <-s.quit:
-				s.ticker.Stop()
+				if s.ticker != nil {
+					s.ticker.Stop()
+				}
 				return
 			}
 		}
