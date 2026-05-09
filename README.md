@@ -4,7 +4,7 @@ BirdView is a self-hosted Docker-based storage visualization and analytics platf
 
 ## Features
 
-- **Blazing Fast Scanning**: Written in Go for highly concurrent, memory-efficient recursive directory scanning.
+- **Fast Scanning**: Written in Go for highly concurrent, memory-efficient recursive directory scanning.
 - **MacOS-Inspired UI**: Beautiful frosted glass interface built with React, Tailwind CSS, and Apache ECharts.
 - **Historical Tracking**: Stores snapshots in an embedded SQLite database to track growth over time.
 - **Easy Deployment**: Ships as a single Docker container with an embedded frontend, making deployment effortless.
