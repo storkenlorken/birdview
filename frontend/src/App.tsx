@@ -503,36 +503,35 @@ function App() {
         <div className="relative z-10 flex flex-col h-screen">
           {/* Top Navigation Bar */}
           <header className="flex-shrink-0 border-b border-black/5 bg-white/60 backdrop-blur-xl sticky top-0 z-20">
-            <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-              <span className="text-sm font-semibold tracking-tight text-gray-800">
-                BirdView
-              </span>
+            <div className="max-w-6xl mx-auto px-6 h-16 flex items-center relative">
+              {/* Logo - Aligned with content below */}
+              <img src="/logo.png" alt="BirdView" className="w-36 h-auto relative z-10" />
 
-              <nav className="flex items-center space-x-1">
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === 'dashboard'
-                      ? 'bg-black/6 text-gray-900'
-                      : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
-                  }`}
-                >
-                  Dashboard
-                </button>
-                <button
-                  onClick={() => setActiveTab('history')}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                    activeTab === 'history'
-                      ? 'bg-black/6 text-gray-900'
-                      : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
-                  }`}
-                >
-                  History
-                </button>
-              </nav>
-
-              {/* placeholder to keep logo centered */}
-              <div className="w-16" />
+              {/* Nav links - Perfectly centered regardless of logo width */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <nav className="flex items-center space-x-1 pointer-events-auto">
+                  <button
+                    onClick={() => setActiveTab('dashboard')}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      activeTab === 'dashboard'
+                        ? 'bg-black/6 text-gray-900'
+                        : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
+                    }`}
+                  >
+                    Dashboard
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('history')}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      activeTab === 'history'
+                        ? 'bg-black/6 text-gray-900'
+                        : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
+                    }`}
+                  >
+                    History
+                  </button>
+                </nav>
+              </div>
             </div>
           </header>
 
