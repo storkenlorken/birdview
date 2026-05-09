@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"gitlab.qvarnstrom.org/storken/birdview/internal/scanner"
+	"github.com/storkenlorken/birdview/internal/scanner"
 )
 
 type Scheduler struct {

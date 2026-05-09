@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"gitlab.qvarnstrom.org/storken/birdview/internal/models"
+	"github.com/storkenlorken/birdview/internal/models"
 )
 
 type Scanner struct {
