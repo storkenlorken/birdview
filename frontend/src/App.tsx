@@ -311,16 +311,22 @@ function TopFilesList({ files, limit = 10, selectedCategory }: { files: TopFile[
   );
 }
 
+function Dashboard() {
   const [currentPath, setCurrentPath] = useState('/data');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [navDirection, setNavDirection] = useState<'forward' | 'back'>('forward');
 
   const handlePathChange = (newPath: string) => {
+    // Determine direction: if new path is longer, we are going deeper (forward)
+    setNavDirection(newPath.length > currentPath.length ? 'forward' : 'back');
     setIsNavigating(true);
-    // Give the browser 50ms to render the "Loading" state before starting the heavy React work
+    // Give the browser 50ms to definitely render the spinner
     setTimeout(() => {
       setCurrentPath(newPath);
-      setIsNavigating(false);
+      // We wrap the "off" state in another small delay so it doesn't 
+      // flick off the instant the render starts
+      setTimeout(() => setIsNavigating(false), 50);
     }, 50);
   };
 
@@ -427,15 +433,14 @@ function TopFilesList({ files, limit = 10, selectedCategory }: { files: TopFile[
   const currentFolder = data.folders.find(f => f.path === currentPath) || { sizeBytes: data.snapshot.totalSizeBytes };
 
   return (
-    <div key={currentPath} className="relative space-y-8 animate-fade-slide-up pb-12">
-      {isNavigating && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white p-6 rounded-2xl shadow-2xl border border-black/5 flex flex-col items-center space-y-4">
-            <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-            <span className="text-sm font-medium text-gray-600">Loading directory...</span>
-          </div>
+    <div className="relative space-y-8 pb-12">
+      {/* Smart Loading Overlay - Only appears if loading takes > 300ms */}
+      <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-white/60 backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0 ${isNavigating ? 'opacity-100 pointer-events-auto delay-300' : 'delay-0'}`}>
+        <div className="bg-white p-5 rounded-2xl shadow-xl border border-black/5 flex items-center space-x-3">
+          <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
+          <span className="text-sm font-medium text-gray-600">Loading...</span>
         </div>
-      )}
+      </div>
 
       <div className="glass rounded-2xl p-6 sm:p-8 space-y-6">
         <div className="flex items-center justify-between">
@@ -483,7 +488,12 @@ function TopFilesList({ files, limit = 10, selectedCategory }: { files: TopFile[
             Subfolders
             <span className="ml-2 text-gray-300 normal-case font-normal tracking-normal">— click to drill down</span>
           </h3>
-          <SubfolderList folders={data.folders} currentPath={currentPath} onPathChange={handlePathChange} />
+          <div
+            key={currentPath}
+            className={navDirection === 'forward' ? 'animate-slide-right' : 'animate-slide-left'}
+          >
+            <SubfolderList folders={data.folders} currentPath={currentPath} onPathChange={handlePathChange} />
+          </div>
         </div>
 
         <div className="glass rounded-2xl p-6">
