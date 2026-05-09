@@ -38,6 +38,9 @@ interface StatsResponse {
   categories: Category[];
   isScanning: boolean;
   filesScanned: number;
+  bytesScanned: number;
+  currentPath: string;
+  startTime: string;
 }
 
 // Helpers
@@ -321,24 +324,53 @@ function Dashboard() {
 
   // If we are scanning for the first time, show a special loading view
   if (!data.snapshot && data.isScanning) {
+    const elapsedSec = (new Date().getTime() - new Date(data.startTime).getTime()) / 1000;
+    const filesPerSec = Math.round(data.filesScanned / (elapsedSec || 1));
+
     return (
-      <div className="flex flex-col items-center justify-center h-full space-y-6 max-w-md mx-auto text-center">
+      <div className="flex flex-col items-center justify-center h-full space-y-8 max-w-2xl mx-auto text-center">
         <div className="relative">
           <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full animate-pulse" />
           <RefreshCw className="w-16 h-16 text-blue-500 animate-spin relative" />
         </div>
+        
         <div className="space-y-2">
-          <h2 className="text-2xl font-semibold tracking-tight">First Scan in Progress</h2>
-          <p className="text-muted-foreground">
-            BirdView is mapping your storage for the first time. This might take a few minutes depending on your disk speed.
+          <h2 className="text-3xl font-bold tracking-tight">Mapping your Storage</h2>
+          <p className="text-muted-foreground text-lg">
+            This is a deep scan. Sit back while we index your files.
           </p>
         </div>
-        <div className="w-full bg-black/5 dark:bg-white/5 rounded-full h-2 overflow-hidden border border-white/5">
-          <div className="h-full bg-blue-500 animate-[shimmer_2s_infinite] w-full bg-gradient-to-r from-blue-500 via-blue-400 to-blue-500 bg-[length:200%_100%]" />
+
+        <div className="w-full space-y-4">
+          <div className="flex justify-between text-sm font-medium tabular-nums">
+            <div className="flex space-x-2">
+              <span className="text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
+                {data.filesScanned.toLocaleString()} files
+              </span>
+              <span className="text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
+                {formatBytes(data.bytesScanned)} scanned
+              </span>
+            </div>
+            <span className="text-muted-foreground bg-white/5 px-3 py-1 rounded-full border border-white/10">
+              {filesPerSec.toLocaleString()} files/sec
+            </span>
+          </div>
+          
+          <div className="w-full bg-black/5 dark:bg-white/5 rounded-full h-3 overflow-hidden border border-white/5 shadow-inner">
+            <div className="h-full bg-blue-500 animate-[shimmer_2s_infinite] w-full bg-gradient-to-r from-blue-500 via-blue-400 to-blue-500 bg-[length:200%_100%]" />
+          </div>
+
+          <div className="glass p-4 rounded-xl border border-white/5 text-left overflow-hidden">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-bold opacity-50">Currently indexing:</div>
+            <div className="font-mono text-xs text-blue-400/80 truncate dir-rtl" dir="rtl">
+              {data.currentPath || 'Waiting for path...'}
+            </div>
+          </div>
         </div>
-        <div className="text-sm font-medium tabular-nums text-blue-500 bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20">
-          Scanned {data.filesScanned.toLocaleString()} files...
-        </div>
+
+        <p className="text-xs text-muted-foreground italic">
+          Tip: Large media libraries can take 5-15 minutes on the first run.
+        </p>
       </div>
     );
   }

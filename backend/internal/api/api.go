@@ -59,6 +59,9 @@ func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
 		"categories":   categories,
 		"isScanning":   a.scanner.IsRunning,
 		"filesScanned": a.scanner.FilesScanned,
+		"bytesScanned": a.scanner.BytesScanned,
+		"currentPath":  a.scanner.CurrentPath,
+		"startTime":    a.scanner.StartTime,
 	}
 	if hasSnapshot {
 		response["snapshot"] = snapshot

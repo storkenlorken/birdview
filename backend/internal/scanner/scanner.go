@@ -21,6 +21,7 @@ type Scanner struct {
 	scanMutex    sync.Mutex
 	IsRunning    bool
 	FilesScanned int64
+	BytesScanned int64
 	CurrentPath  string
 	StartTime    time.Time
 }
@@ -37,6 +38,7 @@ func (s *Scanner) RunScan(basePath string) error {
 	}
 	s.IsRunning = true
 	s.FilesScanned = 0
+	s.BytesScanned = 0
 	s.StartTime = time.Now()
 	defer func() {
 		s.IsRunning = false
@@ -124,6 +126,7 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 						atomic.AddInt64(&totalSize, size)
 						atomic.AddInt64(&totalFiles, 1)
 						atomic.AddInt64(&s.FilesScanned, 1)
+						atomic.AddInt64(&s.BytesScanned, size)
 						
 						dirDirectSize += size
 						dirDirectFiles++
