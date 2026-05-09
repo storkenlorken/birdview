@@ -1,19 +1,11 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Settings, RefreshCw, HardDrive, PieChart as PieChartIcon } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 
 const queryClient = new QueryClient();
 
-// API Types
-interface Snapshot {
-  id: number;
-  timestamp: string;
-  totalSizeBytes: number;
-  totalFiles: number;
-  durationMs: number;
-}
-
+// Types
 interface FolderSnapshot {
   id: number;
   snapshotId: number;
@@ -22,81 +14,131 @@ interface FolderSnapshot {
   fileCount: number;
 }
 
-interface StatsResponse {
-  snapshot: Snapshot;
-  folders: FolderSnapshot[];
+interface TopFile {
+  path: string;
+  sizeBytes: number;
 }
 
+interface Category {
+  category: string;
+  sizeBytes: number;
+  fileCount: number;
+}
+
+interface StatsResponse {
+  snapshot: {
+    id: number;
+    totalSizeBytes: number;
+    totalFiles: number;
+    timestamp: string;
+    durationMs: number;
+  };
+  folders: FolderSnapshot[];
+  topFiles: TopFile[];
+  categories: Category[];
+  isScanning: boolean;
+  filesScanned: number;
+}
+
+// Helpers
 function formatBytes(bytes: number, decimals = 2) {
-  if (!+bytes) return '0 Bytes';
+  if (bytes === 0) return '0 Bytes';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+function getFoldersAtDepth(folders: FolderSnapshot[], parentPath: string) {
+  return folders.filter(f => {
+    if (f.path === parentPath) return false;
+    if (!f.path.startsWith(parentPath === '/' ? '/' : parentPath + '/')) return false;
+    
+    const relativePath = parentPath === '/' ? f.path.substring(1) : f.path.substring(parentPath.length + 1);
+    const parts = relativePath.split('/').filter(Boolean);
+    return parts.length === 1;
+  }).sort((a, b) => b.sizeBytes - a.sizeBytes);
 }
 
 // Components
-function MacOSStorageBar({ folders, totalSize }: { folders: FolderSnapshot[], totalSize: number }) {
+function MacOSStorageBar({ 
+  folders, 
+  totalSize, 
+  currentPath, 
+  onPathChange 
+}: { 
+  folders: FolderSnapshot[], 
+  totalSize: number,
+  currentPath: string,
+  onPathChange: (path: string) => void
+}) {
   if (!folders.length) return null;
 
-  // Group top-level folders (those just under /data)
-  const topLevel = folders.filter(f => {
-    const parts = f.path.split('/').filter(Boolean);
-    return parts.length === 2 && parts[0] === 'data'; // Assuming /data is mount point, so /data/X
-  }).sort((a, b) => b.sizeBytes - a.sizeBytes);
-
-  // If no structure like /data/X, just use the largest
-  const categories = topLevel.length > 0 ? topLevel.slice(0, 5) : folders.slice(0, 5);
-  const otherSize = categories.reduce((acc, curr) => acc - curr.sizeBytes, totalSize);
+  const currentFolder = folders.find(f => f.path === currentPath) || { sizeBytes: totalSize };
+  const subFolders = getFoldersAtDepth(folders, currentPath);
   
-  if (otherSize > 0) {
-    categories.push({ id: -1, path: 'Other', sizeBytes: otherSize, snapshotId: -1, fileCount: 0 });
+  const categories = subFolders.slice(0, 6);
+  const topSize = categories.reduce((acc, curr) => acc + curr.sizeBytes, 0);
+  const otherSize = Math.max(0, currentFolder.sizeBytes - topSize);
+  
+  if (otherSize > 0 && categories.length > 0) {
+    categories.push({ id: -1, path: currentPath + '/Other', sizeBytes: otherSize, snapshotId: -1, fileCount: 0 });
   }
 
   const colors = [
-    'bg-[#ff3b30]', // Apps/Red
-    'bg-[#007aff]', // Documents/Blue
+    'bg-[#ff3b30]', // Red
+    'bg-[#007aff]', // Blue
     'bg-[#ffcc00]', // Yellow
     'bg-[#4cd964]', // Green
     'bg-[#ff9500]', // Orange
+    'bg-[#af52de]', // Purple
     'bg-[#8e8e93]', // Gray
   ];
 
   return (
     <div className="space-y-6">
-      {/* The Stacked Bar */}
-      <div className="h-6 w-full rounded-full overflow-hidden flex shadow-inner bg-black/10 dark:bg-white/10">
-        {categories.map((cat, i) => (
-          <div
-            key={cat.path}
-            style={{ width: `${(cat.sizeBytes / totalSize) * 100}%` }}
-            className={`h-full ${colors[i % colors.length]} transition-all duration-500`}
-            title={`${cat.path}: ${formatBytes(cat.sizeBytes)}`}
-          />
-        ))}
+      <div className="h-8 w-full rounded-xl overflow-hidden flex shadow-inner bg-black/10 dark:bg-white/10 p-1 border border-white/10">
+        {categories.map((cat, i) => {
+          const percentage = (cat.sizeBytes / currentFolder.sizeBytes) * 100;
+          if (percentage < 0.5) return null;
+          
+          return (
+            <button
+              key={cat.path}
+              onClick={() => cat.id !== -1 && onPathChange(cat.path)}
+              style={{ width: `${percentage}%` }}
+              className={`h-full ${colors[i % colors.length]} transition-all duration-300 hover:brightness-110 relative group first:rounded-l-lg last:rounded-r-lg`}
+            >
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-black/80 backdrop-blur-md text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
+                <div className="font-bold">{cat.path.split('/').pop() || 'Other'}</div>
+                <div className="opacity-80">{formatBytes(cat.sizeBytes)} ({percentage.toFixed(1)}%)</div>
+              </div>
+            </button>
+          );
+        })}
       </div>
       
-      {/* The Legend List */}
-      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+      <div className="flex flex-wrap gap-x-6 gap-y-3 text-xs sm:text-sm">
         {categories.map((cat, i) => (
-          <div key={cat.path} className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${colors[i % colors.length]}`} />
-            <span className="font-medium text-foreground/80">{cat.path.split('/').pop()}</span>
-            <span className="text-muted-foreground">{formatBytes(cat.sizeBytes)}</span>
-          </div>
+          <button 
+            key={cat.path} 
+            onClick={() => cat.id !== -1 && onPathChange(cat.path)}
+            className="flex items-center space-x-2 hover:bg-black/5 dark:hover:bg-white/5 px-2 py-1 rounded-md transition-colors"
+          >
+            <div className={`w-2.5 h-2.5 rounded-full ${colors[i % colors.length]}`} />
+            <span className="font-medium text-foreground/80">{cat.path.split('/').pop() || 'Other'}</span>
+            <span className="text-muted-foreground tabular-nums">{formatBytes(cat.sizeBytes)}</span>
+          </button>
         ))}
       </div>
     </div>
   );
 }
 
-function TreemapChart({ folders }: { folders: FolderSnapshot[] }) {
-  // Convert folders to hierarchical ECharts data
-  // For simplicity MVP, we just show top level
-  const topLevel = folders.filter(f => f.path !== '/data' && f.path.split('/').length <= 3).sort((a,b) => b.sizeBytes - a.sizeBytes).slice(0, 20);
-  
-  const data = topLevel.map(f => ({
+function TreemapChart({ folders, currentPath, onPathChange }: { folders: FolderSnapshot[], currentPath: string, onPathChange: (path: string) => void }) {
+  const subFolders = getFoldersAtDepth(folders, currentPath);
+  const data = subFolders.slice(0, 30).map(f => ({
     name: f.path.split('/').pop() || f.path,
     value: f.sizeBytes,
     path: f.path
@@ -104,32 +146,132 @@ function TreemapChart({ folders }: { folders: FolderSnapshot[] }) {
 
   const option = {
     tooltip: {
-      formatter: function (info: any) {
-        var value = info.value;
-        return `${info.name}: ${formatBytes(value)}`;
-      }
+      backgroundColor: 'rgba(0,0,0,0.8)',
+      borderColor: 'rgba(255,255,255,0.1)',
+      textStyle: { color: '#fff' },
+      formatter: (params: any) => `${params.name}<br/>${formatBytes(params.value)}`
     },
-    series: [
-      {
-        type: 'treemap',
-        width: '100%',
-        height: '100%',
-        roam: false,
-        nodeClick: false,
-        breadcrumb: { show: false },
-        itemStyle: {
-          gapWidth: 1,
-          borderColor: 'transparent'
-        },
-        data: data
-      }
-    ]
+    series: [{
+      type: 'treemap',
+      width: '100%',
+      height: '100%',
+      roam: false,
+      nodeClick: false,
+      breadcrumb: { show: false },
+      label: { show: true, formatter: '{b}' },
+      itemStyle: { gapWidth: 1, borderColor: 'transparent' },
+      data: data
+    }]
   };
 
-  return <ReactECharts option={option} style={{ height: '300px', width: '100%' }} />;
+  return (
+    <div className="h-[300px] w-full">
+      <ReactECharts 
+        option={option} 
+        style={{ height: '100%', width: '100%' }}
+        onEvents={{
+          'click': (params: any) => {
+            if (params.data && params.data.path) onPathChange(params.data.path);
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+function Breadcrumbs({ path, onPathChange }: { path: string, onPathChange: (path: string) => void }) {
+  const parts = path.split('/').filter(Boolean);
+  const trail = [{ name: 'Root', path: '/data' }];
+  
+  let current = '/data';
+  parts.forEach(p => {
+    if (p === 'data') return;
+    current += '/' + p;
+    trail.push({ name: p, path: current });
+  });
+
+  return (
+    <nav className="flex items-center space-x-1 text-sm text-muted-foreground mb-4">
+      {trail.map((t, i) => (
+        <React.Fragment key={t.path}>
+          {i > 0 && <span>/</span>}
+          <button 
+            onClick={() => onPathChange(t.path)}
+            className={`hover:text-foreground px-1 py-0.5 rounded transition-colors ${i === trail.length - 1 ? 'text-foreground font-semibold' : ''}`}
+          >
+            {t.name}
+          </button>
+        </React.Fragment>
+      ))}
+    </nav>
+  );
+}
+
+function TopFilesList({ files }: { files: TopFile[] }) {
+  if (!files || files.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      {files.slice(0, 10).map((file, i) => (
+        <div key={file.path} className="flex items-center justify-between group py-1">
+          <div className="flex items-center space-x-3 min-w-0">
+            <span className="text-muted-foreground/50 tabular-nums w-4 text-xs">{i + 1}</span>
+            <div className="truncate text-sm font-medium hover:text-blue-500 transition-colors cursor-default" title={file.path}>
+              {file.path.split('/').pop()}
+            </div>
+          </div>
+          <span className="text-xs text-muted-foreground tabular-nums ml-4 whitespace-nowrap bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded">
+            {formatBytes(file.sizeBytes)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FileCategories({ categories, totalSize }: { categories: Category[], totalSize: number }) {
+  if (!categories || categories.length === 0) return null;
+
+  const sorted = [...categories].sort((a, b) => b.sizeBytes - a.sizeBytes);
+  
+  const categoryColors: Record<string, string> = {
+    'Video': 'bg-red-500',
+    'Audio': 'bg-blue-500',
+    'Images': 'bg-yellow-500',
+    'Archives': 'bg-green-500',
+    'Documents': 'bg-orange-500',
+    'Backups': 'bg-purple-500',
+    'Other': 'bg-gray-500',
+  };
+
+  return (
+    <div className="space-y-4">
+      {sorted.map(cat => {
+        const percentage = (cat.sizeBytes / totalSize) * 100;
+        return (
+          <div key={cat.category} className="space-y-1.5">
+            <div className="flex justify-between text-xs font-medium">
+              <span className="flex items-center">
+                <div className={`w-2 h-2 rounded-full mr-2 ${categoryColors[cat.category] || 'bg-gray-500'}`} />
+                {cat.category}
+              </span>
+              <span className="text-muted-foreground">{formatBytes(cat.sizeBytes)} ({percentage.toFixed(1)}%)</span>
+            </div>
+            <div className="h-1.5 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+              <div 
+                className={`h-full ${categoryColors[cat.category] || 'bg-gray-500'} transition-all duration-1000`} 
+                style={{ width: `${percentage}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function Dashboard() {
+  const [currentPath, setCurrentPath] = useState('/data');
   const { data, isLoading, refetch } = useQuery<StatsResponse>({
     queryKey: ['stats'],
     queryFn: async () => {
@@ -140,9 +282,18 @@ function Dashboard() {
     refetchInterval: 10000,
   });
 
+  useEffect(() => {
+    if (data?.folders && currentPath === '/data') {
+      const atRoot = getFoldersAtDepth(data.folders, '/data');
+      if (atRoot.length === 1) {
+        setCurrentPath(atRoot[0].path);
+      }
+    }
+  }, [data, currentPath]);
+
   const startScan = async () => {
     await fetch('/api/scan/start', { method: 'POST' });
-    setTimeout(refetch, 2000); // Trigger refetch soon after starting
+    setTimeout(refetch, 2000);
   };
 
   if (isLoading) {
@@ -168,44 +319,82 @@ function Dashboard() {
     );
   }
 
+  const currentFolder = data.folders.find(f => f.path === currentPath) || { sizeBytes: data.snapshot.totalSizeBytes };
+
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="glass rounded-2xl p-6 sm:p-8 space-y-6">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+      <div className="glass rounded-2xl p-6 sm:p-8 space-y-6 border border-white/10">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-semibold tracking-tight">Macintosh HD</h2>
-            <p className="text-muted-foreground mt-1">
-              {formatBytes(data.snapshot.totalSizeBytes)} used of ? GB
+          <div className="space-y-1">
+            <Breadcrumbs path={currentPath} onPathChange={setCurrentPath} />
+            <h2 className="text-3xl font-semibold tracking-tight">
+              {currentPath.split('/').pop() || 'Root'}
+            </h2>
+            <p className="text-muted-foreground">
+              {formatBytes(currentFolder.sizeBytes)} used
             </p>
           </div>
-          <button onClick={startScan} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-            <RefreshCw className="w-5 h-5 text-muted-foreground" />
-          </button>
+          <div className="flex items-center space-x-4">
+            {data.isScanning && (
+              <div className="flex items-center space-x-2 text-xs font-medium text-blue-500 animate-pulse bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                <span>Scanning: {data.filesScanned.toLocaleString()} files...</span>
+              </div>
+            )}
+            <button 
+              onClick={startScan} 
+              disabled={data.isScanning}
+              className={`p-3 rounded-full transition-all border border-white/10 ${data.isScanning ? 'opacity-50 cursor-not-allowed bg-white/5' : 'hover:bg-black/10 dark:hover:bg-white/10 bg-white/5 shadow-sm'}`}
+            >
+              <RefreshCw className={`w-5 h-5 ${data.isScanning ? 'animate-spin text-blue-500' : 'text-muted-foreground'}`} />
+            </button>
+          </div>
         </div>
 
-        <MacOSStorageBar folders={data.folders} totalSize={data.snapshot.totalSizeBytes} />
+        <MacOSStorageBar 
+          folders={data.folders} 
+          totalSize={data.snapshot.totalSizeBytes} 
+          currentPath={currentPath}
+          onPathChange={setCurrentPath}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="glass rounded-2xl p-6 border border-white/10 lg:col-span-2">
+          <h3 className="text-lg font-medium mb-4 flex items-center"><PieChartIcon className="w-4 h-4 mr-2 text-blue-500" /> Storage Hierarchy</h3>
+          <TreemapChart folders={data.folders} currentPath={currentPath} onPathChange={setCurrentPath} />
+        </div>
+
+        <div className="glass rounded-2xl p-6 border border-white/10">
+          <h3 className="text-lg font-medium mb-4 flex items-center"><HardDrive className="w-4 h-4 mr-2 text-yellow-500" /> File Types</h3>
+          <FileCategories categories={data.categories} totalSize={data.snapshot.totalSizeBytes} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-lg font-medium mb-4 flex items-center"><PieChartIcon className="w-4 h-4 mr-2" /> Storage Hierarchy</h3>
-          <TreemapChart folders={data.folders} />
+        <div className="glass rounded-2xl p-6 border border-white/10">
+          <h3 className="text-lg font-medium mb-6 flex items-center"><RefreshCw className="w-4 h-4 mr-2 text-red-500" /> Top 10 Largest Files</h3>
+          <TopFilesList files={data.topFiles} />
         </div>
         
-        <div className="glass rounded-2xl p-6">
-           <h3 className="text-lg font-medium mb-4">Quick Stats</h3>
+        <div className="glass rounded-2xl p-6 border border-white/10">
+           <h3 className="text-lg font-medium mb-4 flex items-center"><HardDrive className="w-4 h-4 mr-2 text-purple-500" /> Details</h3>
            <div className="space-y-4">
-             <div className="flex justify-between items-center py-2 border-b border-border/50">
-               <span className="text-muted-foreground">Total Files</span>
-               <span className="font-medium">{data.snapshot.totalFiles.toLocaleString()}</span>
+             <div className="flex justify-between items-center py-2 border-b border-white/5">
+               <span className="text-muted-foreground">Path</span>
+               <span className="font-mono text-xs max-w-[200px] truncate" title={currentPath}>{currentPath}</span>
              </div>
-             <div className="flex justify-between items-center py-2 border-b border-border/50">
+             <div className="flex justify-between items-center py-2 border-b border-white/5">
+               <span className="text-muted-foreground">File Count</span>
+               <span className="font-medium">{(currentFolder as any).fileCount?.toLocaleString() || data.snapshot.totalFiles.toLocaleString()}</span>
+             </div>
+             <div className="flex justify-between items-center py-2 border-b border-white/5">
                <span className="text-muted-foreground">Last Scan</span>
-               <span className="font-medium">{new Date(data.snapshot.timestamp).toLocaleString()}</span>
+               <span className="font-medium text-xs">{new Date(data.snapshot.timestamp).toLocaleString()}</span>
              </div>
-             <div className="flex justify-between items-center py-2 border-b border-border/50">
+             <div className="flex justify-between items-center py-2 border-b border-white/5">
                <span className="text-muted-foreground">Scan Duration</span>
-               <span className="font-medium">{data.snapshot.durationMs} ms</span>
+               <span className="font-medium text-xs">{data.snapshot.durationMs} ms</span>
              </div>
            </div>
         </div>
@@ -228,14 +417,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-        {/* Soft Background Gradient */}
         <div className="fixed inset-0 z-0 pointer-events-none">
           <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-500/20 blur-[120px] mix-blend-multiply dark:mix-blend-screen" />
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-500/20 blur-[120px] mix-blend-multiply dark:mix-blend-screen" />
         </div>
 
         <div className="relative z-10 flex h-screen overflow-hidden">
-          {/* Sidebar */}
           <aside className="w-64 border-r border-border/50 glass hidden md:flex flex-col">
             <div className="p-6">
               <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-500">BirdView</h1>
@@ -255,7 +442,6 @@ function App() {
             </div>
           </aside>
 
-          {/* Main Content */}
           <main className="flex-1 overflow-y-auto p-6 lg:p-10">
             <div className="max-w-5xl mx-auto">
               <Dashboard />

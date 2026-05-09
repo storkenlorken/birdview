@@ -50,9 +50,28 @@ func createSchema(db *sqlx.DB) error {
 		FOREIGN KEY(snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
 	);
 
+	CREATE TABLE IF NOT EXISTS top_files (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		snapshot_id INTEGER NOT NULL,
+		path TEXT NOT NULL,
+		size_bytes INTEGER NOT NULL,
+		FOREIGN KEY(snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
+	);
+
+	CREATE TABLE IF NOT EXISTS category_snapshots (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		snapshot_id INTEGER NOT NULL,
+		category TEXT NOT NULL,
+		size_bytes INTEGER NOT NULL,
+		file_count INTEGER NOT NULL,
+		FOREIGN KEY(snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
+	);
+
 	-- Indexes for faster lookups
 	CREATE INDEX IF NOT EXISTS idx_folder_snapshots_snapshot_id ON folder_snapshots(snapshot_id);
 	CREATE INDEX IF NOT EXISTS idx_folder_snapshots_path ON folder_snapshots(path);
+	CREATE INDEX IF NOT EXISTS idx_top_files_snapshot_id ON top_files(snapshot_id);
+	CREATE INDEX IF NOT EXISTS idx_category_snapshots_snapshot_id ON category_snapshots(snapshot_id);
 	`
 
 	_, err := db.Exec(schema)

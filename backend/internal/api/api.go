@@ -47,9 +47,29 @@ func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get top files
+	var topFiles []models.TopFile
+	err = a.db.Select(&topFiles, "SELECT * FROM top_files WHERE snapshot_id = ? ORDER BY size_bytes DESC", snapshot.ID)
+	if err != nil {
+		http.Error(w, "Failed to get top files", http.StatusInternalServerError)
+		return
+	}
+
+	// Get categories
+	var categories []models.CategorySnapshot
+	err = a.db.Select(&categories, "SELECT * FROM category_snapshots WHERE snapshot_id = ?", snapshot.ID)
+	if err != nil {
+		http.Error(w, "Failed to get categories", http.StatusInternalServerError)
+		return
+	}
+
 	response := map[string]interface{}{
-		"snapshot": snapshot,
-		"folders":  folders,
+		"snapshot":     snapshot,
+		"folders":      folders,
+		"topFiles":     topFiles,
+		"categories":   categories,
+		"isScanning":   a.scanner.IsRunning,
+		"filesScanned": a.scanner.FilesScanned,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

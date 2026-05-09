@@ -12,6 +12,7 @@ WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/server/main.go
 
 # Stage 3: Final Image

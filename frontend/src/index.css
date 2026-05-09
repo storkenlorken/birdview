@@ -75,22 +75,15 @@
 
 @layer base {
   * {
-    border-color: hsl(var(--border));
+    @apply border-border;
   }
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+    @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
 /* Glassmorphism utility */
 .glass {
-  background-color: hsl(var(--background) / 0.6);
-  backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-}
-.dark .glass {
-  border-color: rgba(255, 255, 255, 0.1);
+  @apply bg-background/60 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-lg;
 }
