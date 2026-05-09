@@ -1,70 +1,45 @@
-# BirdView
+# 🐦 BirdView
 
-BirdView is a self-hosted Docker-based storage visualization and analytics platform for home servers and NAS environments. It scans a mounted data directory, analyzes storage usage recursively, stores historical snapshots, and presents the information in a beautiful, macOS-inspired web UI with interactive visualizations.
+### Ever wondered where all your storage went?
+BirdView is a snappy, macOS-inspired dashboard that helps you hunt down space-hogs on your Unraid server (or any home server). It scans your drives, categorizes your junk, and tracks how your storage grows over time.
 
-## Features
+![BirdView Screenshot](https://raw.githubusercontent.com/storkenlorken/birdview/main/screenshots/dashboard.png)
 
-- **Fast Scanning**: Written in Go for highly concurrent, memory-efficient recursive directory scanning.
-- **MacOS-Inspired UI**: Beautiful frosted glass interface built with React, Tailwind CSS, and Apache ECharts.
-- **Historical Tracking**: Stores snapshots in an embedded SQLite database to track growth over time.
-- **Easy Deployment**: Ships as a single Docker container with an embedded frontend, making deployment effortless.
-- **Exclusion Support**: Automatically excludes `.git`, `node_modules`, `.DS_Store`, and more.
+## Why you'll love it
+*   **Fast as heck**: Written in Go, so it rips through millions of files in seconds.
+*   **Eye Candy**: A beautiful frosted glass UI that actually looks good in 2024.
+*   **Time Travel**: See exactly how much your "Backups" folder grew since last month.
+*   **No Mess**: Just one Docker container. No complex setup, no external databases.
 
-## Installation
+## Get it running
 
-### Unraid (Community Applications)
-The easiest way to install BirdView on Unraid is through the **Apps** tab:
-1. Search for `BirdView`.
-2. Click **Install**.
-3. By default, it scans `/mnt/user`. You can change this in the template settings.
+### Unraid (The easy way)
+1. Head to the **Apps** tab.
+2. Search for `BirdView`.
+3. Hit **Install** and you're done!
 
-### Docker CLI
-```bash
-docker run -d \
-  --name=birdview \
-  -p 8080:8080 \
-  -v /your/data:/data:ro \
-  -v /your/appdata:/app/db \
-  --restart unless-stopped \
-  storkenlorken/birdview
+#### Configuration
+*   **Storage to Scan**: Point this to whatever you want BirdView to analyze (default: `/mnt/user`).
+*   **AppData**: This is where BirdView saves its history database. Keep this persistent so you don't lose your charts!
+*   **Scan Interval**: Set how many days to wait between automatic scans. We recommend **7 days** to keep your drives happy.
+*   **Web Port**: The port where you'll access the dashboard (default: `8080`).
+
+### Docker Compose
+Just copy this into your `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+services:
+  birdview:
+    image: storkenlorken/birdview
+    ports:
+      - "8080:8080"
+    volumes:
+      - /mnt/user:/data:ro        # What you want to scan
+      - ./appdata:/app/data       # Where to save history
+    environment:
+      - BIRDVIEW_SCAN_INTERVAL_DAYS=7
 ```
-
-### Using Docker Compose (Recommended)
-
-1. Clone this repository or copy the `docker-compose.yml` file.
-2. Edit `docker-compose.yml` to point to the directory you want to scan:
-   ```yaml
-   volumes:
-     - /path/to/your/data:/data:ro # <-- Change /path/to/your/data
-     - birdview_data:/app/data
-   ```
-3. Start the container:
-   ```bash
-   docker compose up -d
-   ```
-4. Open your browser and navigate to `http://localhost:8080`.
-
-### Local Development
-
-#### Prerequisites
-- Go 1.21+
-- Node.js 20+
-
-#### Running the Backend
-```bash
-cd backend
-BIRDVIEW_DB_PATH=./data/birdview.db BIRDVIEW_DATA_PATH=/path/to/scan go run cmd/server/main.go
-```
-
-#### Running the Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-The frontend will proxy API requests to `http://localhost:8080`.
 
 ## License
-
-MIT
-# birdview
+MIT. Go wild.
