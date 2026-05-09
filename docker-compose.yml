@@ -9,7 +9,7 @@ services:
       - "8080:8080"
     volumes:
       # Change this to the actual directory you want to scan on your host
-      - /home:/data:ro
+      - /mnt/user:/data:ro
       # Persistent volume for BirdView's database and settings
       - birdview_data:/app/data
     environment:

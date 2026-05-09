@@ -86,6 +86,7 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 				s.CurrentPath = path
 				entries, err := os.ReadDir(path)
 				if err != nil {
+					log.Printf("Error reading directory %s: %v", path, err)
 					pending.Done()
 					continue
 				}
