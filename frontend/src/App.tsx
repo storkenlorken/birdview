@@ -532,9 +532,17 @@ function Dashboard() {
             <div className="flex justify-between items-center py-2.5 border-b border-black/5">
               <span className="text-sm text-gray-400">Next Scan</span>
               <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-                {new Date(data.nextScanTime).getTime() > Date.now()
-                  ? `in ${Math.ceil((new Date(data.nextScanTime).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days`
-                  : 'Starting soon...'}
+                {(() => {
+                  const diffMs = new Date(data.nextScanTime).getTime() - Date.now();
+                  if (diffMs <= 0) return 'Starting soon...';
+                  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                  const diffMins = Math.floor(diffMs / (1000 * 60));
+                  
+                  if (diffDays > 0) return `in ${diffDays} day${diffDays > 1 ? 's' : ''}`;
+                  if (diffHours > 0) return `in ${diffHours} hour${diffHours > 1 ? 's' : ''}`;
+                  return `in ${diffMins} min${diffMins > 1 ? 's' : ''}`;
+                })()}
               </span>
             </div>
             <div className="flex justify-between items-center py-2.5 border-b border-black/5">
