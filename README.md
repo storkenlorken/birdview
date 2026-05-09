@@ -7,7 +7,7 @@ BirdView is a snappy, macOS-inspired dashboard that helps you hunt down space-ho
 
 ## Why you'll love it
 *   **Fast as heck**: Written in Go, so it rips through millions of files in a few minutes.
-*   **Eye Candy**: A beautiful frosted glass UI that actually looks good in 2024.
+*   **Eye Candy**: A beautiful frosted glass UI that actually looks good.
 *   **Time Travel**: See exactly how much your "Backups" folder grew since last month.
 *   **No Mess**: Just one Docker container. No complex setup, no external databases.
 
