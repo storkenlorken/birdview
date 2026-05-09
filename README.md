@@ -10,7 +10,24 @@ BirdView is a self-hosted Docker-based storage visualization and analytics platf
 - **Easy Deployment**: Ships as a single Docker container with an embedded frontend, making deployment effortless.
 - **Exclusion Support**: Automatically excludes `.git`, `node_modules`, `.DS_Store`, and more.
 
-## Getting Started
+## Installation
+
+### Unraid (Community Applications)
+The easiest way to install BirdView on Unraid is through the **Apps** tab:
+1. Search for `BirdView`.
+2. Click **Install**.
+3. By default, it scans `/mnt/user`. You can change this in the template settings.
+
+### Docker CLI
+```bash
+docker run -d \
+  --name=birdview \
+  -p 8080:8080 \
+  -v /your/data:/data:ro \
+  -v /your/appdata:/app/db \
+  --restart unless-stopped \
+  storkenlorken/birdview
+```
 
 ### Using Docker Compose (Recommended)
 

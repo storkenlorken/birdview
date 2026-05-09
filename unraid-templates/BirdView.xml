@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<Container version="2.0">
+  <Name>BirdView</Name>
+  <Repository>storkenlorken/birdview</Repository>
+  <Registry>https://hub.docker.com/r/storkenlorken/birdview</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>[PASTE_YOUR_FORUM_LINK_HERE]</Support>
+  <Project>https://github.com/storkenlorken/birdview</Project>
+  <Overview>
+    BirdView is a modern, blazing-fast storage visualization dashboard. It allows you to explore your Unraid shares, identify space wasters by category (Video, Backups, etc.), and track storage trends over time with historical snapshots.
+  </Overview>
+  <Category>Tools: System: Status: Storage:</Category>
+  <WebUI>http://[IP]:[PORT:8080]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/storkenlorken/birdview/main/unraid-templates/BirdView.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/storkenlorken/birdview/main/frontend/public/favicon.svg</Icon>
+  <ExtraParams>--restart unless-stopped</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Description>Modern storage visualization and historical tracking dashboard.</Description>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>8080</HostPort>
+        <ContainerPort>8080</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user</HostDir>
+      <ContainerDir>/data</ContainerDir>
+      <Mode>ro</Mode>
+    </Volume>
+    <Volume>
+      <HostDir>/mnt/user/appdata/birdview</HostDir>
+      <ContainerDir>/app/db</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+  </Data>
+  <Environment>
+    <Variable>
+      <Value>99</Value>
+      <Name>PUID</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>100</Value>
+      <Name>PGID</Name>
+      <Mode/>
+    </Variable>
+  </Environment>
+  <Labels/>
+  <Config Name="Web UI Port" Target="8080" Default="8080" Mode="tcp" Description="The port the dashboard is accessible on." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Storage to Scan" Target="/data" Default="/mnt/user" Mode="ro" Description="The root path you want BirdView to scan and visualize." Type="Path" Display="always" Required="true" Mask="false">/mnt/user</Config>
+  <Config Name="AppData (Database)" Target="/app/db" Default="/mnt/user/appdata/birdview" Mode="rw" Description="Location for the SQLite database to store history." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/birdview</Config>
+</Container>
