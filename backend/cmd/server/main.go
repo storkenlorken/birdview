@@ -67,7 +67,7 @@ func main() {
 	defer sched.Stop()
 
 	// Initialize API
-	apiService := api.NewAPI(database, scanService)
+	apiService := api.NewAPI(database, scanService, sched)
 
 	// Initialize Router
 	r := chi.NewRouter()

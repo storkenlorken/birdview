@@ -10,10 +10,11 @@ import (
 )
 
 type Scheduler struct {
-	scanner *scanner.Scanner
-	db      *sqlx.DB
-	ticker  *time.Ticker
-	quit    chan struct{}
+	scanner      *scanner.Scanner
+	db           *sqlx.DB
+	ticker       *time.Ticker
+	quit         chan struct{}
+	NextScanTime time.Time
 }
 
 func NewScheduler(s *scanner.Scanner, db *sqlx.DB) *Scheduler {
@@ -48,6 +49,7 @@ func (s *Scheduler) Start(interval time.Duration, dataPath string) {
 			}
 		}
 
+		s.NextScanTime = time.Now().Add(interval)
 		s.ticker = time.NewTicker(interval)
 		for {
 			select {
@@ -58,6 +60,7 @@ func (s *Scheduler) Start(interval time.Duration, dataPath string) {
 				} else {
 					log.Println("Scheduled scan completed successfully.")
 				}
+				s.NextScanTime = time.Now().Add(interval)
 			case <-s.quit:
 				if s.ticker != nil {
 					s.ticker.Stop()

@@ -10,17 +10,20 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/storkenlorken/birdview/internal/models"
 	"github.com/storkenlorken/birdview/internal/scanner"
+	"github.com/storkenlorken/birdview/internal/scheduler"
 )
 
 type API struct {
-	db      *sqlx.DB
-	scanner *scanner.Scanner
+	db        *sqlx.DB
+	scanner   *scanner.Scanner
+	scheduler *scheduler.Scheduler
 }
 
-func NewAPI(db *sqlx.DB, s *scanner.Scanner) *API {
+func NewAPI(db *sqlx.DB, s *scanner.Scanner, sched *scheduler.Scheduler) *API {
 	return &API{
-		db:      db,
-		scanner: s,
+		db:        db,
+		scanner:   s,
+		scheduler: sched,
 	}
 }
 
@@ -65,6 +68,7 @@ func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
 		"bytesScanned": a.scanner.BytesScanned,
 		"currentPath":  a.scanner.CurrentPath,
 		"startTime":    a.scanner.StartTime,
+		"nextScanTime": a.scheduler.NextScanTime,
 	}
 	if hasSnapshot {
 		response["snapshot"] = snapshot

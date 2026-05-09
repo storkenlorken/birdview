@@ -44,6 +44,7 @@ interface StatsResponse {
   bytesScanned: number;
   currentPath: string;
   startTime: string;
+  nextScanTime: string;
 }
 
 // Helpers
@@ -528,6 +529,14 @@ function Dashboard() {
             <FolderHistoryChart path={currentPath} />
           </div>
           <div className="space-y-1">
+            <div className="flex justify-between items-center py-2.5 border-b border-black/5">
+              <span className="text-sm text-gray-400">Next Scan</span>
+              <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                {new Date(data.nextScanTime).getTime() > Date.now() 
+                  ? `in ${Math.ceil((new Date(data.nextScanTime).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days`
+                  : 'Starting soon...'}
+              </span>
+            </div>
             <div className="flex justify-between items-center py-2.5 border-b border-black/5">
               <span className="text-sm text-gray-400">Path</span>
               <span className="font-mono text-xs max-w-[200px] truncate text-gray-600" title={currentPath}>{currentPath}</span>
