@@ -532,7 +532,7 @@ function Dashboard() {
             <div className="flex justify-between items-center py-2.5 border-b border-black/5">
               <span className="text-sm text-gray-400">Next Scan</span>
               <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-                {new Date(data.nextScanTime).getTime() > Date.now() 
+                {new Date(data.nextScanTime).getTime() > Date.now()
                   ? `in ${Math.ceil((new Date(data.nextScanTime).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days`
                   : 'Starting soon...'}
               </span>
@@ -622,7 +622,7 @@ function DeleteModal({ isOpen, onConfirm, onCancel, date }: { isOpen: boolean, o
     <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
       {/* Layer 1: The Dark Dimming */}
       <div className={`absolute inset-0 bg-black/10 transition-opacity duration-700 ease-in-out ${isOpen ? 'opacity-100' : 'opacity-0'}`} onClick={onCancel} />
-      
+
       {/* Layer 2: The Constant Blur (Faded In/Out) */}
       <div className={`absolute inset-0 backdrop-blur-md transition-opacity duration-700 ease-in-out pointer-events-none ${isOpen ? 'opacity-100' : 'opacity-0'}`} />
 
@@ -807,9 +807,9 @@ function HistoryView({ onOpenDeleteModal }: { onOpenDeleteModal: (s: Snapshot) =
                     <div className="flex items-center space-x-3">
                       <Calendar className="w-4 h-4 text-gray-300" />
                       <span className="text-sm font-medium text-gray-700">
-                        {new Date(s.timestamp).toLocaleString(undefined, { 
-                          dateStyle: 'medium', 
-                          timeStyle: 'short' 
+                        {new Date(s.timestamp).toLocaleString(undefined, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short'
                         })}
                       </span>
                     </div>
@@ -829,7 +829,7 @@ function HistoryView({ onOpenDeleteModal }: { onOpenDeleteModal: (s: Snapshot) =
                   <td className="py-4 text-right">
                     <div className="flex items-center justify-end relative h-8">
                       <span className="text-xs font-mono text-gray-300 transition-opacity group-hover:opacity-0">#{s.id}</span>
-                      <button 
+                      <button
                         onClick={() => onOpenDeleteModal(s)}
                         className="absolute right-0 opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                         title="Delete this scan"
@@ -860,8 +860,8 @@ function App() {
 
   const confirmDelete = () => {
     if (deletingId) {
-      window.dispatchEvent(new CustomEvent('history-action', { 
-        detail: { action: 'confirm-delete', id: deletingId } 
+      window.dispatchEvent(new CustomEvent('history-action', {
+        detail: { action: 'confirm-delete', id: deletingId }
       }));
       setDeletingId(null);
     }
@@ -912,8 +912,8 @@ function App() {
         </div>
       </div>
 
-      <DeleteModal 
-        isOpen={deletingId !== null} 
+      <DeleteModal
+        isOpen={deletingId !== null}
         date={deletingDate}
         onConfirm={confirmDelete}
         onCancel={() => setDeletingId(null)}
