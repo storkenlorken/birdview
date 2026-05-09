@@ -33,43 +33,35 @@ func (a *API) RegisterRoutes(r chi.Router) {
 func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
 	// Get latest snapshot
 	var snapshot models.Snapshot
+	hasSnapshot := true
 	err := a.db.Get(&snapshot, "SELECT * FROM snapshots ORDER BY timestamp DESC LIMIT 1")
 	if err != nil {
-		http.Error(w, "No snapshots found", http.StatusNotFound)
-		return
+		hasSnapshot = false
 	}
 
-	// Get folder sizes for that snapshot
 	var folders []models.FolderSnapshot
-	err = a.db.Select(&folders, "SELECT * FROM folder_snapshots WHERE snapshot_id = ?", snapshot.ID)
-	if err != nil {
-		http.Error(w, "Failed to get folders", http.StatusInternalServerError)
-		return
-	}
-
-	// Get top files
 	var topFiles []models.TopFile
-	err = a.db.Select(&topFiles, "SELECT * FROM top_files WHERE snapshot_id = ? ORDER BY size_bytes DESC", snapshot.ID)
-	if err != nil {
-		http.Error(w, "Failed to get top files", http.StatusInternalServerError)
-		return
-	}
-
-	// Get categories
 	var categories []models.CategorySnapshot
-	err = a.db.Select(&categories, "SELECT * FROM category_snapshots WHERE snapshot_id = ?", snapshot.ID)
-	if err != nil {
-		http.Error(w, "Failed to get categories", http.StatusInternalServerError)
-		return
+
+	if hasSnapshot {
+		// Get folder sizes for that snapshot
+		a.db.Select(&folders, "SELECT * FROM folder_snapshots WHERE snapshot_id = ?", snapshot.ID)
+		// Get top files
+		a.db.Select(&topFiles, "SELECT * FROM top_files WHERE snapshot_id = ? ORDER BY size_bytes DESC", snapshot.ID)
+		// Get categories
+		a.db.Select(&categories, "SELECT * FROM category_snapshots WHERE snapshot_id = ?", snapshot.ID)
 	}
 
 	response := map[string]interface{}{
-		"snapshot":     snapshot,
+		"snapshot":     nil,
 		"folders":      folders,
 		"topFiles":     topFiles,
 		"categories":   categories,
 		"isScanning":   a.scanner.IsRunning,
 		"filesScanned": a.scanner.FilesScanned,
+	}
+	if hasSnapshot {
+		response["snapshot"] = snapshot
 	}
 
 	w.Header().Set("Content-Type", "application/json")

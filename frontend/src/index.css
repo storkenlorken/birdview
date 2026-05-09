@@ -87,3 +87,10 @@
 .glass {
   @apply bg-background/60 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-lg;
 }
+
+@layer utilities {
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}

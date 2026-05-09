@@ -304,7 +304,7 @@ function Dashboard() {
     );
   }
 
-  if (!data || !data.snapshot) {
+  if (!data || (!data.snapshot && !data.isScanning)) {
     return (
       <div className="flex flex-col items-center justify-center h-full space-y-4">
         <HardDrive className="w-16 h-16 text-muted-foreground/30" />
@@ -315,6 +315,30 @@ function Dashboard() {
         >
           Start Initial Scan
         </button>
+      </div>
+    );
+  }
+
+  // If we are scanning for the first time, show a special loading view
+  if (!data.snapshot && data.isScanning) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full space-y-6 max-w-md mx-auto text-center">
+        <div className="relative">
+          <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full animate-pulse" />
+          <RefreshCw className="w-16 h-16 text-blue-500 animate-spin relative" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold tracking-tight">First Scan in Progress</h2>
+          <p className="text-muted-foreground">
+            BirdView is mapping your storage for the first time. This might take a few minutes depending on your disk speed.
+          </p>
+        </div>
+        <div className="w-full bg-black/5 dark:bg-white/5 rounded-full h-2 overflow-hidden border border-white/5">
+          <div className="h-full bg-blue-500 animate-[shimmer_2s_infinite] w-full bg-gradient-to-r from-blue-500 via-blue-400 to-blue-500 bg-[length:200%_100%]" />
+        </div>
+        <div className="text-sm font-medium tabular-nums text-blue-500 bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20">
+          Scanned {data.filesScanned.toLocaleString()} files...
+        </div>
       </div>
     );
   }
