@@ -57,7 +57,7 @@ function getFoldersAtDepth(folders: FolderSnapshot[], parentPath: string) {
   return folders.filter(f => {
     if (f.path === parentPath) return false;
     if (!f.path.startsWith(parentPath === '/' ? '/' : parentPath + '/')) return false;
-    
+
     const relativePath = parentPath === '/' ? f.path.substring(1) : f.path.substring(parentPath.length + 1);
     const parts = relativePath.split('/').filter(Boolean);
     return parts.length === 1;
@@ -65,13 +65,13 @@ function getFoldersAtDepth(folders: FolderSnapshot[], parentPath: string) {
 }
 
 // Components
-function MacOSStorageBar({ 
-  folders, 
-  totalSize, 
-  currentPath, 
-  onPathChange 
-}: { 
-  folders: FolderSnapshot[], 
+function MacOSStorageBar({
+  folders,
+  totalSize,
+  currentPath,
+  onPathChange
+}: {
+  folders: FolderSnapshot[],
   totalSize: number,
   currentPath: string,
   onPathChange: (path: string) => void
@@ -80,11 +80,11 @@ function MacOSStorageBar({
 
   const currentFolder = folders.find(f => f.path === currentPath) || { sizeBytes: totalSize };
   const subFolders = getFoldersAtDepth(folders, currentPath);
-  
+
   const categories = subFolders.slice(0, 6);
   const topSize = categories.reduce((acc, curr) => acc + curr.sizeBytes, 0);
   const otherSize = Math.max(0, currentFolder.sizeBytes - topSize);
-  
+
   if (otherSize > 0 && categories.length > 0) {
     categories.push({ id: -1, path: currentPath + '/Other', sizeBytes: otherSize, snapshotId: -1, fileCount: 0 });
   }
@@ -100,7 +100,7 @@ function MacOSStorageBar({
         {categories.map((cat, i) => {
           const percentage = (cat.sizeBytes / currentFolder.sizeBytes) * 100;
           if (percentage < 0.5) return null;
-          
+
           return (
             <button
               key={cat.path}
@@ -116,11 +116,11 @@ function MacOSStorageBar({
           );
         })}
       </div>
-      
+
       <div className="flex flex-wrap gap-x-6 gap-y-3 text-xs sm:text-sm">
         {categories.map((cat, i) => (
-          <button 
-            key={cat.path} 
+          <button
+            key={cat.path}
             onClick={() => cat.id !== -1 && onPathChange(cat.path)}
             className="flex items-center space-x-2 hover:bg-black/5 px-2 py-1 rounded-md transition-colors"
           >
@@ -161,11 +161,10 @@ function SubfolderList({ folders, currentPath, onPathChange }: { folders: Folder
           <button
             key={folder.path}
             onClick={() => hasChildren && onPathChange(folder.path)}
-            className={`w-full text-left group rounded-xl px-4 py-3 transition-all ${
-              hasChildren
+            className={`w-full text-left group rounded-xl px-4 py-3 transition-all ${hasChildren
                 ? 'hover:bg-black/5 cursor-pointer'
                 : 'cursor-default opacity-50'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center space-x-3 min-w-0">
@@ -202,7 +201,7 @@ function SubfolderList({ folders, currentPath, onPathChange }: { folders: Folder
 function Breadcrumbs({ path, onPathChange }: { path: string, onPathChange: (path: string) => void }) {
   const parts = path.split('/').filter(Boolean);
   const trail = [{ name: 'Root', path: '/data' }];
-  
+
   let current = '/data';
   parts.forEach(p => {
     if (p === 'data') return;
@@ -215,11 +214,10 @@ function Breadcrumbs({ path, onPathChange }: { path: string, onPathChange: (path
       {trail.map((t, i) => (
         <React.Fragment key={t.path}>
           {i > 0 && <span className="opacity-40">/</span>}
-          <button 
+          <button
             onClick={() => onPathChange(t.path)}
-            className={`hover:text-gray-900 px-1 py-0.5 rounded transition-colors ${
-              i === trail.length - 1 ? 'text-gray-800 font-semibold' : ''
-            }`}
+            className={`hover:text-gray-900 px-1 py-0.5 rounded transition-colors ${i === trail.length - 1 ? 'text-gray-800 font-semibold' : ''
+              }`}
           >
             {t.name}
           </button>
@@ -235,7 +233,7 @@ function FileCategories({ categories, totalSize, selectedCategory, onCategorySel
   if (!categories || categories.length === 0) return null;
 
   const sorted = [...categories].sort((a, b) => b.sizeBytes - a.sizeBytes);
-  
+
   const categoryColors: Record<string, string> = {
     'Video': 'bg-red-500',
     'Audio': 'bg-blue-500',
@@ -252,14 +250,13 @@ function FileCategories({ categories, totalSize, selectedCategory, onCategorySel
       {sorted.map(cat => {
         const percentage = (cat.sizeBytes / totalSize) * 100;
         const isSelected = selectedCategory === cat.category;
-        
+
         return (
-          <button 
-            key={cat.category} 
+          <button
+            key={cat.category}
             onClick={() => onCategorySelect(isSelected ? null : cat.category)}
-            className={`w-full text-left space-y-1.5 p-2 rounded-xl transition-all group ${
-              isSelected ? 'bg-black/5 ring-1 ring-black/5' : 'hover:bg-black/2'
-            }`}
+            className={`w-full text-left space-y-1.5 p-2 rounded-xl transition-all group ${isSelected ? 'bg-black/5 ring-1 ring-black/5' : 'hover:bg-black/2'
+              }`}
           >
             <div className="flex justify-between text-xs font-medium">
               <span className="flex items-center">
@@ -269,8 +266,8 @@ function FileCategories({ categories, totalSize, selectedCategory, onCategorySel
               <span className="text-muted-foreground">{formatBytes(cat.sizeBytes)} ({percentage.toFixed(1)}%)</span>
             </div>
             <div className="h-1.5 w-full bg-black/5 rounded-full overflow-hidden">
-              <div 
-                className={`h-full ${categoryColors[cat.category] || 'bg-gray-400'} transition-all duration-1000 ${isSelected ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`} 
+              <div
+                className={`h-full ${categoryColors[cat.category] || 'bg-gray-400'} transition-all duration-1000 ${isSelected ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}
                 style={{ width: `${percentage}%` }}
               />
             </div>
@@ -283,9 +280,9 @@ function FileCategories({ categories, totalSize, selectedCategory, onCategorySel
 
 function TopFilesList({ files, limit = 10, selectedCategory }: { files: TopFile[], limit?: number, selectedCategory?: string | null }) {
   if (!files || files.length === 0) return <div className="text-sm text-gray-400 italic">No files found.</div>;
-  
+
   // Filter by category if one is selected
-  const filteredFiles = selectedCategory 
+  const filteredFiles = selectedCategory
     ? files.filter(f => f.category === selectedCategory)
     : files;
 
@@ -355,7 +352,7 @@ function Dashboard() {
       <div className="flex flex-col items-center justify-center h-full space-y-4">
         <HardDrive className="w-16 h-16 text-gray-300" />
         <h2 className="text-xl font-medium text-gray-500">No data yet</h2>
-        <button 
+        <button
           onClick={startScan}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-colors font-medium text-sm"
         >
@@ -376,7 +373,7 @@ function Dashboard() {
           <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full animate-pulse" />
           <RefreshCw className="w-16 h-16 text-blue-500 animate-spin relative" />
         </div>
-        
+
         <div className="space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">Mapping your Storage</h2>
           <p className="text-muted-foreground text-lg">
@@ -398,7 +395,7 @@ function Dashboard() {
               {filesPerSec.toLocaleString()} files/sec
             </span>
           </div>
-          
+
           <div className="w-full bg-black/5 dark:bg-white/5 rounded-full h-3 overflow-hidden border border-white/5 shadow-inner">
             <div className="h-full bg-blue-500 animate-[shimmer_2s_infinite] w-full bg-gradient-to-r from-blue-500 via-blue-400 to-blue-500 bg-[length:200%_100%]" />
           </div>
@@ -440,23 +437,22 @@ function Dashboard() {
                 <span>Scanning: {data.filesScanned.toLocaleString()} files...</span>
               </div>
             )}
-            <button 
-              onClick={startScan} 
+            <button
+              onClick={startScan}
               disabled={data.isScanning}
-              className={`p-2.5 rounded-xl transition-all border ${
-                data.isScanning
+              className={`p-2.5 rounded-xl transition-all border ${data.isScanning
                   ? 'opacity-50 cursor-not-allowed bg-gray-100 border-gray-200'
                   : 'hover:bg-gray-100 bg-white border-gray-200 shadow-sm'
-              }`}
+                }`}
             >
               <RefreshCw className={`w-4 h-4 ${data.isScanning ? 'animate-spin text-blue-600' : 'text-gray-500'}`} />
             </button>
           </div>
         </div>
 
-        <MacOSStorageBar 
-          folders={data.folders} 
-          totalSize={data.snapshot.totalSizeBytes} 
+        <MacOSStorageBar
+          folders={data.folders}
+          totalSize={data.snapshot.totalSizeBytes}
           currentPath={currentPath}
           onPathChange={setCurrentPath}
         />
@@ -477,9 +473,9 @@ function Dashboard() {
             <PieChartIcon className="w-3.5 h-3.5 mr-2" />
             File Types
           </h3>
-          <FileCategories 
-            categories={data.categories} 
-            totalSize={data.snapshot.totalSizeBytes} 
+          <FileCategories
+            categories={data.categories}
+            totalSize={data.snapshot.totalSizeBytes}
             selectedCategory={selectedCategory}
             onCategorySelect={setSelectedCategory}
           />
@@ -492,35 +488,35 @@ function Dashboard() {
             <RefreshCw className="w-3.5 h-3.5 mr-2" />
             {selectedCategory ? `Top ${selectedCategory} Files` : 'Global Top 10 Largest Files'}
           </h3>
-          <TopFilesList 
-            files={data.topFiles} 
-            selectedCategory={selectedCategory} 
+          <TopFilesList
+            files={data.topFiles}
+            selectedCategory={selectedCategory}
           />
         </div>
-        
+
         <div className="glass rounded-2xl p-6">
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center">
             <HardDrive className="w-3.5 h-3.5 mr-2" />
             Details
           </h3>
-           <div className="space-y-1">
-             <div className="flex justify-between items-center py-2.5 border-b border-black/5">
-               <span className="text-sm text-gray-400">Path</span>
-               <span className="font-mono text-xs max-w-[200px] truncate text-gray-600" title={currentPath}>{currentPath}</span>
-             </div>
-             <div className="flex justify-between items-center py-2.5 border-b border-black/5">
-               <span className="text-sm text-gray-400">File Count</span>
-               <span className="text-sm font-semibold text-gray-800">{(currentFolder as any).fileCount?.toLocaleString() || data.snapshot.totalFiles.toLocaleString()}</span>
-             </div>
-             <div className="flex justify-between items-center py-2.5 border-b border-black/5">
-               <span className="text-sm text-gray-400">Last Scan</span>
-               <span className="text-sm text-gray-600">{new Date(data.snapshot.timestamp).toLocaleString()}</span>
-             </div>
-             <div className="flex justify-between items-center py-2.5">
-               <span className="text-sm text-gray-400">Scan Duration</span>
-               <span className="text-sm text-gray-600">{data.snapshot.durationMs} ms</span>
-             </div>
-           </div>
+          <div className="space-y-1">
+            <div className="flex justify-between items-center py-2.5 border-b border-black/5">
+              <span className="text-sm text-gray-400">Path</span>
+              <span className="font-mono text-xs max-w-[200px] truncate text-gray-600" title={currentPath}>{currentPath}</span>
+            </div>
+            <div className="flex justify-between items-center py-2.5 border-b border-black/5">
+              <span className="text-sm text-gray-400">File Count</span>
+              <span className="text-sm font-semibold text-gray-800">{(currentFolder as any).fileCount?.toLocaleString() || data.snapshot.totalFiles.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center py-2.5 border-b border-black/5">
+              <span className="text-sm text-gray-400">Last Scan</span>
+              <span className="text-sm text-gray-600">{new Date(data.snapshot.timestamp).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center py-2.5">
+              <span className="text-sm text-gray-400">Scan Duration</span>
+              <span className="text-sm text-gray-600">{data.snapshot.durationMs} ms</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -545,21 +541,19 @@ function App() {
                 <nav className="flex items-center space-x-1 pointer-events-auto">
                   <button
                     onClick={() => setActiveTab('dashboard')}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      activeTab === 'dashboard'
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'dashboard'
                         ? 'bg-black/6 text-gray-900'
                         : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
-                    }`}
+                      }`}
                   >
                     Dashboard
                   </button>
                   <button
                     onClick={() => setActiveTab('history')}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      activeTab === 'history'
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'history'
                         ? 'bg-black/6 text-gray-900'
                         : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
-                    }`}
+                      }`}
                   >
                     History
                   </button>
