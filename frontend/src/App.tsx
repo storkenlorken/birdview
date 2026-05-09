@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useTransition } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { RefreshCw, HardDrive, PieChart as PieChartIcon, ChevronRight, File as FileIcon } from 'lucide-react';
+import { RefreshCw, HardDrive, PieChart as PieChartIcon, ChevronRight, File as FileIcon, History, Calendar, Clock, Trash2 } from 'lucide-react';
+import ReactECharts from 'echarts-for-react';
 
 const queryClient = new QueryClient();
 
@@ -25,14 +26,16 @@ interface Category {
   fileCount: number;
 }
 
+interface Snapshot {
+  id: number;
+  totalSizeBytes: number;
+  totalFiles: number;
+  timestamp: string;
+  durationMs: number;
+}
+
 interface StatsResponse {
-  snapshot: {
-    id: number;
-    totalSizeBytes: number;
-    totalFiles: number;
-    timestamp: string;
-    durationMs: number;
-  };
+  snapshot: Snapshot;
   folders: FolderSnapshot[];
   topFiles: TopFile[];
   categories: Category[];
@@ -519,8 +522,11 @@ function Dashboard() {
         <div className="glass rounded-2xl p-6">
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center">
             <HardDrive className="w-3.5 h-3.5 mr-2" />
-            Details
+            Folder Analytics
           </h3>
+          <div className="mb-6">
+            <FolderHistoryChart path={currentPath} />
+          </div>
           <div className="space-y-1">
             <div className="flex justify-between items-center py-2.5 border-b border-black/5">
               <span className="text-sm text-gray-400">Path</span>
@@ -545,8 +551,312 @@ function Dashboard() {
   );
 }
 
+function FolderHistoryChart({ path }: { path: string }) {
+  const { data: history, isLoading } = useQuery<{ timestamp: string, sizeBytes: number }[]>({
+    queryKey: ['folder-history', path],
+    queryFn: async () => {
+      const res = await fetch(`/api/history/folder?path=${encodeURIComponent(path)}`);
+      if (!res.ok) throw new Error('Failed to fetch folder history');
+      return res.json();
+    }
+  });
+
+  if (isLoading || !history || history.length < 2) {
+    return (
+      <div className="h-24 flex items-center justify-center border border-dashed border-black/5 rounded-xl bg-black/[0.01]">
+        <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">History requires 2+ scans</p>
+      </div>
+    );
+  }
+
+  const option = {
+    grid: { left: 0, right: 0, top: 10, bottom: 0 },
+    xAxis: {
+      type: 'category',
+      data: history.map(h => h.timestamp),
+      show: false
+    },
+    yAxis: {
+      type: 'value',
+      show: false,
+      min: 'dataMin'
+    },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        const d = params[0];
+        return `<div class="text-[10px] font-bold">${formatBytes(d.value)}</div><div class="text-[9px] opacity-60">${new Date(d.name).toLocaleDateString()}</div>`;
+      },
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      padding: [4, 8]
+    },
+    series: [{
+      data: history.map(h => h.sizeBytes),
+      type: 'line',
+      smooth: true,
+      symbol: 'none',
+      lineStyle: { width: 2, color: '#3b82f6' },
+      areaStyle: {
+        color: {
+          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [{ offset: 0, color: 'rgba(59, 130, 246, 0.15)' }, { offset: 1, color: 'rgba(59, 130, 246, 0)' }]
+        }
+      }
+    }]
+  };
+
+  return <ReactECharts option={option} style={{ height: '80px', width: '100%' }} />;
+}
+
+function DeleteModal({ isOpen, onConfirm, onCancel, date }: { isOpen: boolean, onConfirm: () => void, onCancel: () => void, date: string }) {
+  return (
+    <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+      {/* Layer 1: The Dark Dimming */}
+      <div className={`absolute inset-0 bg-black/10 transition-opacity duration-700 ease-in-out ${isOpen ? 'opacity-100' : 'opacity-0'}`} onClick={onCancel} />
+      
+      {/* Layer 2: The Constant Blur (Faded In/Out) */}
+      <div className={`absolute inset-0 backdrop-blur-md transition-opacity duration-700 ease-in-out pointer-events-none ${isOpen ? 'opacity-100' : 'opacity-0'}`} />
+
+      <div className={`glass bg-white/95 rounded-3xl p-8 max-w-sm w-full relative z-10 shadow-2xl transition-all duration-300 transform ${isOpen ? 'scale-100 translate-y-0 opacity-100' : 'scale-95 translate-y-4 opacity-0'}`}>
+        <div className="flex flex-col items-center text-center space-y-4">
+          <div className="p-3 bg-red-50 rounded-full">
+            <Trash2 className="w-8 h-8 text-red-500" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-semibold text-gray-900">Delete Snapshot?</h3>
+            <p className="text-sm text-gray-500">
+              Are you sure you want to delete the scan from <span className="font-semibold text-gray-700">{date}</span>? This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex flex-col w-full space-y-2 pt-4">
+            <button
+              onClick={onConfirm}
+              className="w-full py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl transition-all shadow-lg shadow-red-500/20 active:scale-95"
+            >
+              Delete Snapshot
+            </button>
+            <button
+              onClick={onCancel}
+              className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium rounded-xl transition-all active:scale-95"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistoryView({ onOpenDeleteModal }: { onOpenDeleteModal: (s: Snapshot) => void }) {
+  const { data: history, isLoading, refetch } = useQuery<Snapshot[]>({
+    queryKey: ['history'],
+    queryFn: async () => {
+      const res = await fetch('/api/history');
+      if (!res.ok) throw new Error('Failed to fetch history');
+      return res.json();
+    }
+  });
+
+  const { refetch: refetchStats } = useQuery({ queryKey: ['stats'], enabled: false });
+
+  const deleteMutation = async (id: number) => {
+    try {
+      const res = await fetch(`/api/history/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+      refetch();
+      refetchStats();
+    } catch (err) {
+      alert('Error deleting snapshot');
+    }
+  };
+
+  useEffect(() => {
+    // We listen for a custom event to trigger deletion since the modal state is now at the top
+    const handleAction = (e: any) => {
+      if (e.detail.action === 'confirm-delete') {
+        deleteMutation(e.detail.id);
+      }
+    };
+    window.addEventListener('history-action', handleAction);
+    return () => window.removeEventListener('history-action', handleAction);
+  }, [refetch, refetchStats]);
+
+  if (isLoading || !history) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="w-8 h-8 text-blue-500 animate-spin opacity-40" />
+      </div>
+    );
+  }
+
+  const chartOption = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: any) => {
+        const data = params[0];
+        return `<div class="p-2">
+          <div class="text-xs text-gray-500 mb-1">${new Date(data.name).toLocaleString()}</div>
+          <div class="font-bold text-gray-900">${formatBytes(data.value)}</div>
+        </div>`;
+      },
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: 'rgba(0, 0, 0, 0.05)',
+      textStyle: { color: '#111827' }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      top: '10%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: history.map(s => s.timestamp),
+      axisLabel: {
+        formatter: (value: string) => new Date(value).toLocaleDateString(),
+        color: '#9ca3af',
+        fontSize: 11
+      },
+      axisLine: { show: false },
+      axisTick: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        formatter: (value: number) => formatBytes(value, 0),
+        color: '#9ca3af',
+        fontSize: 11
+      },
+      splitLine: { lineStyle: { type: 'dashed', color: '#f3f4f6' } }
+    },
+    series: [{
+      data: history.map(s => s.totalSizeBytes),
+      type: 'line',
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 8,
+      itemStyle: { color: '#3b82f6' },
+      areaStyle: {
+        color: {
+          type: 'linear',
+          x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
+            { offset: 1, color: 'rgba(59, 130, 246, 0)' }
+          ]
+        }
+      },
+      lineStyle: { width: 3 }
+    }]
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+      <div className="glass rounded-2xl p-6 sm:p-8">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="p-2 bg-blue-50 rounded-xl">
+            <PieChartIcon className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight text-gray-900">Storage Trends</h2>
+            <p className="text-sm text-gray-500">Historical growth of your protected data</p>
+          </div>
+        </div>
+        <div className="h-[300px]">
+          <ReactECharts option={chartOption} style={{ height: '100%', width: '100%' }} />
+        </div>
+      </div>
+
+      <div className="glass rounded-2xl p-6 sm:p-8">
+        <div className="flex items-center space-x-3 mb-8">
+          <div className="p-2 bg-gray-50 rounded-xl">
+            <History className="w-5 h-5 text-gray-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight text-gray-900">Scan History</h2>
+            <p className="text-sm text-gray-500">Chronological log of all completed scans</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-black/5 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                <th className="pb-4 font-medium">Date & Time</th>
+                <th className="pb-4 font-medium">Total Size</th>
+                <th className="pb-4 font-medium">Files</th>
+                <th className="pb-4 font-medium">Duration</th>
+                <th className="pb-4 font-medium text-right w-24">ID</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/5">
+              {history.slice().reverse().map((s) => (
+                <tr key={s.id} className="group hover:bg-black/[0.02] transition-colors">
+                  <td className="py-4">
+                    <div className="flex items-center space-x-3">
+                      <Calendar className="w-4 h-4 text-gray-300" />
+                      <span className="text-sm font-medium text-gray-700">
+                        {new Date(s.timestamp).toLocaleString(undefined, { 
+                          dateStyle: 'medium', 
+                          timeStyle: 'short' 
+                        })}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-4">
+                    <span className="text-sm font-semibold text-gray-900">{formatBytes(s.totalSizeBytes)}</span>
+                  </td>
+                  <td className="py-4">
+                    <span className="text-sm text-gray-500">{s.totalFiles.toLocaleString()} files</span>
+                  </td>
+                  <td className="py-4">
+                    <div className="flex items-center space-x-1.5 text-gray-500">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span className="text-xs">{Math.round(s.durationMs / 1000)}s</span>
+                    </div>
+                  </td>
+                  <td className="py-4 text-right">
+                    <div className="flex items-center justify-end relative h-8">
+                      <span className="text-xs font-mono text-gray-300 transition-opacity group-hover:opacity-0">#{s.id}</span>
+                      <button 
+                        onClick={() => onOpenDeleteModal(s)}
+                        className="absolute right-0 opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Delete this scan"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deletingDate, setDeletingDate] = useState<string>('');
+
+  const openDeleteModal = (snapshot: Snapshot) => {
+    setDeletingId(snapshot.id);
+    setDeletingDate(new Date(snapshot.timestamp).toLocaleString());
+  };
+
+  const confirmDelete = () => {
+    if (deletingId) {
+      window.dispatchEvent(new CustomEvent('history-action', { 
+        detail: { action: 'confirm-delete', id: deletingId } 
+      }));
+      setDeletingId(null);
+    }
+  };
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -587,16 +897,18 @@ function App() {
           <main className="flex-1 overflow-y-auto">
             <div className="max-w-6xl mx-auto px-6 py-8">
               {activeTab === 'dashboard' && <Dashboard />}
-              {activeTab === 'history' && (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-400 space-y-2">
-                  <HardDrive className="w-10 h-10 opacity-30" />
-                  <p className="text-sm">History view coming soon</p>
-                </div>
-              )}
+              {activeTab === 'history' && <HistoryView onOpenDeleteModal={openDeleteModal} />}
             </div>
           </main>
         </div>
       </div>
+
+      <DeleteModal 
+        isOpen={deletingId !== null} 
+        date={deletingDate}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeletingId(null)}
+      />
     </QueryClientProvider>
   );
 }

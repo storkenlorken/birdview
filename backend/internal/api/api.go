@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
@@ -26,6 +27,8 @@ func NewAPI(db *sqlx.DB, s *scanner.Scanner) *API {
 func (a *API) RegisterRoutes(r chi.Router) {
 	r.Get("/stats", a.getStats)
 	r.Get("/history", a.getHistory)
+	r.Get("/history/folder", a.getFolderHistory)
+	r.Delete("/history/{id}", a.deleteSnapshot)
 	r.Post("/scan/start", a.startScan)
 	r.Get("/settings", a.getSettings)
 }
@@ -81,6 +84,53 @@ func (a *API) getHistory(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(snapshots)
+}
+
+func (a *API) getFolderHistory(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		http.Error(w, "Path is required", http.StatusBadRequest)
+		return
+	}
+
+	type HistoryPoint struct {
+		Timestamp time.Time `db:"timestamp" json:"timestamp"`
+		SizeBytes int64     `db:"size_bytes" json:"sizeBytes"`
+	}
+	var history []HistoryPoint
+
+	query := `
+		SELECT s.timestamp, fs.size_bytes 
+		FROM folder_snapshots fs
+		JOIN snapshots s ON fs.snapshot_id = s.id
+		WHERE fs.path = ?
+		ORDER BY s.timestamp ASC
+	`
+	err := a.db.Select(&history, query, path)
+	if err != nil {
+		http.Error(w, "Failed to get folder history", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(history)
+}
+
+func (a *API) deleteSnapshot(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "ID is required", http.StatusBadRequest)
+		return
+	}
+
+	_, err := a.db.Exec("DELETE FROM snapshots WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, "Failed to delete snapshot", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "Snapshot deleted"})
 }
 
 func (a *API) startScan(w http.ResponseWriter, r *http.Request) {
