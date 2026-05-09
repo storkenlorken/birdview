@@ -262,6 +262,7 @@ function FileCategories({ categories, totalSize }: { categories: Category[], tot
     'Archives': 'bg-green-500',
     'Documents': 'bg-orange-500',
     'Backups': 'bg-purple-500',
+    'System': 'bg-cyan-500',
     'Other': 'bg-gray-500',
   };
 

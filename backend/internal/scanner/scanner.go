@@ -184,12 +184,13 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles *[]models.To
 	ext := strings.ToLower(filepath.Ext(path))
 	cat := "Other"
 	switch ext {
-	case ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm": cat = "Video"
-	case ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg": cat = "Audio"
-	case ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp", ".bmp", ".tiff": cat = "Images"
-	case ".zip", ".tar", ".gz", ".rar", ".7z", ".iso": cat = "Archives"
-	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".md": cat = "Documents"
-	case ".bak", ".old", ".tmp": cat = "Backups"
+	case ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".m2ts": cat = "Video"
+	case ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wma": cat = "Audio"
+	case ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp", ".bmp", ".tiff", ".heic", ".heif": cat = "Images"
+	case ".zip", ".tar", ".gz", ".rar", ".7z", ".iso", ".bz2", ".xz", ".dmg", ".pkg", ".deb", ".rpm": cat = "Archives"
+	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".md", ".csv", ".rtf": cat = "Documents"
+	case ".bak", ".old", ".tmp", ".bundle", ".sparsebundle", ".backupbundle", ".backupdb", ".vhd", ".vhdx", ".qcow2", ".img": cat = "Backups"
+	case ".db", ".sqlite", ".sqlite3", ".sql", ".log", ".env", ".json", ".yaml", ".yml", ".xml", ".conf", ".config": cat = "System"
 	}
 
 	if _, exists := categories[cat]; !exists {
