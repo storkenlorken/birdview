@@ -183,6 +183,8 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles *[]models.To
 	// Categories
 	ext := strings.ToLower(filepath.Ext(path))
 	cat := "Other"
+	
+	// First check by extension
 	switch ext {
 	case ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".m2ts": cat = "Video"
 	case ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wma": cat = "Audio"
@@ -191,6 +193,16 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles *[]models.To
 	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".md", ".csv", ".rtf": cat = "Documents"
 	case ".bak", ".old", ".tmp", ".bundle", ".sparsebundle", ".backupbundle", ".backupdb", ".vhd", ".vhdx", ".qcow2", ".img": cat = "Backups"
 	case ".db", ".sqlite", ".sqlite3", ".sql", ".log", ".env", ".json", ".yaml", ".yml", ".xml", ".conf", ".config": cat = "System"
+	}
+
+	// If still "Other", try path-based heuristic (good for Time Machine and generic backup folders)
+	if cat == "Other" {
+		lowerPath := strings.ToLower(path)
+		if strings.Contains(lowerPath, "timemachine") || strings.Contains(lowerPath, ".sparsebundle") || strings.Contains(lowerPath, "backup") {
+			cat = "Backups"
+		} else if strings.Contains(lowerPath, "docker/") || strings.Contains(lowerPath, "/.plex/") {
+			cat = "System"
+		}
 	}
 
 	if _, exists := categories[cat]; !exists {
