@@ -162,8 +162,8 @@ function SubfolderList({ folders, currentPath, onPathChange }: { folders: Folder
             key={folder.path}
             onClick={() => hasChildren && onPathChange(folder.path)}
             className={`w-full text-left group rounded-xl px-4 py-3 transition-all ${hasChildren
-                ? 'hover:bg-black/5 cursor-pointer'
-                : 'cursor-default opacity-50'
+              ? 'hover:bg-black/5 cursor-pointer'
+              : 'cursor-default opacity-50'
               }`}
           >
             <div className="flex items-center justify-between mb-1.5">
@@ -441,8 +441,8 @@ function Dashboard() {
               onClick={startScan}
               disabled={data.isScanning}
               className={`p-2.5 rounded-xl transition-all border ${data.isScanning
-                  ? 'opacity-50 cursor-not-allowed bg-gray-100 border-gray-200'
-                  : 'hover:bg-gray-100 bg-white border-gray-200 shadow-sm'
+                ? 'opacity-50 cursor-not-allowed bg-gray-100 border-gray-200'
+                : 'hover:bg-gray-100 bg-white border-gray-200 shadow-sm'
                 }`}
             >
               <RefreshCw className={`w-4 h-4 ${data.isScanning ? 'animate-spin text-blue-600' : 'text-gray-500'}`} />
@@ -542,8 +542,8 @@ function App() {
                   <button
                     onClick={() => setActiveTab('dashboard')}
                     className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'dashboard'
-                        ? 'bg-black/6 text-gray-900'
-                        : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
+                      ? 'bg-black/6 text-gray-900'
+                      : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
                       }`}
                   >
                     Dashboard
@@ -551,8 +551,8 @@ function App() {
                   <button
                     onClick={() => setActiveTab('history')}
                     className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'history'
-                        ? 'bg-black/6 text-gray-900'
-                        : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
+                      ? 'bg-black/6 text-gray-900'
+                      : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
                       }`}
                   >
                     History
