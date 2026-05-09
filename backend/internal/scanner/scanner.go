@@ -188,7 +188,7 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles map[string][
 		case ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".m2ts": cat = "Video"
 		case ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".wma": cat = "Audio"
 		case ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp", ".bmp", ".tiff", ".heic", ".heif": cat = "Images"
-		case ".zip", ".tar", ".gz", ".rar", ".7z", ".iso", ".bz2", ".xz", ".dmg", ".pkg", ".deb", ".rpm": cat = "Archives"
+		case ".zip", ".tar", ".gz", ".rar", ".7z", ".iso", ".bz2", ".xz", ".dmg", ".pkg", ".deb", ".rpm", ".zim", ".pst", ".ost": cat = "Archives"
 		case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".md", ".csv", ".rtf": cat = "Documents"
 		case ".bak", ".old", ".tmp": cat = "Backups"
 		case ".db", ".sqlite", ".sqlite3", ".sql", ".log", ".env", ".json", ".yaml", ".yml", ".xml", ".conf", ".config": cat = "System"
