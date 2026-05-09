@@ -311,9 +311,18 @@ function TopFilesList({ files, limit = 10, selectedCategory }: { files: TopFile[
   );
 }
 
-function Dashboard() {
   const [currentPath, setCurrentPath] = useState('/data');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  const handlePathChange = (newPath: string) => {
+    setIsNavigating(true);
+    // Give the browser 50ms to render the "Loading" state before starting the heavy React work
+    setTimeout(() => {
+      setCurrentPath(newPath);
+      setIsNavigating(false);
+    }, 50);
+  };
 
   const { data, isLoading, refetch } = useQuery<StatsResponse>({
     queryKey: ['stats'],
@@ -418,11 +427,20 @@ function Dashboard() {
   const currentFolder = data.folders.find(f => f.path === currentPath) || { sizeBytes: data.snapshot.totalSizeBytes };
 
   return (
-    <div key={currentPath} className="space-y-8 animate-fade-slide-up pb-12">
+    <div key={currentPath} className="relative space-y-8 animate-fade-slide-up pb-12">
+      {isNavigating && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl border border-black/5 flex flex-col items-center space-y-4">
+            <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+            <span className="text-sm font-medium text-gray-600">Loading directory...</span>
+          </div>
+        </div>
+      )}
+
       <div className="glass rounded-2xl p-6 sm:p-8 space-y-6">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
-            <Breadcrumbs path={currentPath} onPathChange={setCurrentPath} />
+            <Breadcrumbs path={currentPath} onPathChange={handlePathChange} />
             <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
               {currentPath.split('/').pop() || 'Root'}
             </h2>
@@ -454,7 +472,7 @@ function Dashboard() {
           folders={data.folders}
           totalSize={data.snapshot.totalSizeBytes}
           currentPath={currentPath}
-          onPathChange={setCurrentPath}
+          onPathChange={handlePathChange}
         />
       </div>
 
@@ -465,7 +483,7 @@ function Dashboard() {
             Subfolders
             <span className="ml-2 text-gray-300 normal-case font-normal tracking-normal">— click to drill down</span>
           </h3>
-          <SubfolderList folders={data.folders} currentPath={currentPath} onPathChange={setCurrentPath} />
+          <SubfolderList folders={data.folders} currentPath={currentPath} onPathChange={handlePathChange} />
         </div>
 
         <div className="glass rounded-2xl p-6">
