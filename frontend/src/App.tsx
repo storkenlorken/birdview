@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { RefreshCw, HardDrive, PieChart as PieChartIcon, ChevronRight } from 'lucide-react';
+import { RefreshCw, HardDrive, PieChart as PieChartIcon, ChevronRight, File as FileIcon } from 'lucide-react';
 
 const queryClient = new QueryClient();
 
@@ -16,6 +16,7 @@ interface FolderSnapshot {
 interface TopFile {
   path: string;
   sizeBytes: number;
+  category: string;
 }
 
 interface Category {
@@ -228,29 +229,9 @@ function Breadcrumbs({ path, onPathChange }: { path: string, onPathChange: (path
   );
 }
 
-function TopFilesList({ files }: { files: TopFile[] }) {
-  if (!files || files.length === 0) return null;
 
-  return (
-    <div className="space-y-3">
-      {files.slice(0, 10).map((file, i) => (
-        <div key={file.path} className="flex items-center justify-between group py-1.5">
-          <div className="flex items-center space-x-3 min-w-0">
-            <span className="text-gray-300 tabular-nums w-4 text-xs">{i + 1}</span>
-            <div className="truncate text-sm font-medium hover:text-blue-600 transition-colors cursor-default" title={file.path}>
-              {file.path.split('/').pop()}
-            </div>
-          </div>
-          <span className="text-xs text-gray-400 tabular-nums ml-4 whitespace-nowrap bg-black/5 px-2 py-0.5 rounded">
-            {formatBytes(file.sizeBytes)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
-function FileCategories({ categories, totalSize }: { categories: Category[], totalSize: number }) {
+function FileCategories({ categories, totalSize, selectedCategory, onCategorySelect }: { categories: Category[], totalSize: number, selectedCategory: string | null, onCategorySelect: (cat: string | null) => void }) {
   if (!categories || categories.length === 0) return null;
 
   const sorted = [...categories].sort((a, b) => b.sizeBytes - a.sizeBytes);
@@ -263,37 +244,80 @@ function FileCategories({ categories, totalSize }: { categories: Category[], tot
     'Documents': 'bg-orange-500',
     'Backups': 'bg-purple-500',
     'System': 'bg-cyan-500',
-    'Other': 'bg-gray-500',
+    'Other': 'bg-gray-400',
   };
 
   return (
     <div className="space-y-4">
       {sorted.map(cat => {
         const percentage = (cat.sizeBytes / totalSize) * 100;
+        const isSelected = selectedCategory === cat.category;
+        
         return (
-          <div key={cat.category} className="space-y-1.5">
+          <button 
+            key={cat.category} 
+            onClick={() => onCategorySelect(isSelected ? null : cat.category)}
+            className={`w-full text-left space-y-1.5 p-2 rounded-xl transition-all group ${
+              isSelected ? 'bg-black/5 ring-1 ring-black/5' : 'hover:bg-black/2'
+            }`}
+          >
             <div className="flex justify-between text-xs font-medium">
               <span className="flex items-center">
-                <div className={`w-2 h-2 rounded-full mr-2 ${categoryColors[cat.category] || 'bg-gray-500'}`} />
-                {cat.category}
+                <div className={`w-2 h-2 rounded-full mr-2 ${categoryColors[cat.category] || 'bg-gray-400'} ${isSelected ? 'scale-125 shadow-sm' : 'group-hover:scale-110'} transition-transform`} />
+                <span className={isSelected ? 'text-gray-900 font-bold' : 'text-gray-600'}>{cat.category}</span>
               </span>
               <span className="text-muted-foreground">{formatBytes(cat.sizeBytes)} ({percentage.toFixed(1)}%)</span>
             </div>
             <div className="h-1.5 w-full bg-black/5 rounded-full overflow-hidden">
               <div 
-                className={`h-full ${categoryColors[cat.category] || 'bg-gray-400'} transition-all duration-1000`} 
+                className={`h-full ${categoryColors[cat.category] || 'bg-gray-400'} transition-all duration-1000 ${isSelected ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`} 
                 style={{ width: `${percentage}%` }}
               />
             </div>
-          </div>
+          </button>
         );
       })}
     </div>
   );
 }
 
+function TopFilesList({ files, limit = 10, selectedCategory }: { files: TopFile[], limit?: number, selectedCategory?: string | null }) {
+  if (!files || files.length === 0) return <div className="text-sm text-gray-400 italic">No files found.</div>;
+  
+  // Filter by category if one is selected
+  const filteredFiles = selectedCategory 
+    ? files.filter(f => f.category === selectedCategory)
+    : files;
+
+  return (
+    <div className="space-y-3">
+      {filteredFiles.slice(0, selectedCategory ? 50 : limit).map((file, idx) => (
+        <div key={idx} className="flex items-center justify-between group p-2 hover:bg-black/2 rounded-lg transition-all">
+          <div className="flex items-center min-w-0 flex-1">
+            <span className="text-[10px] font-mono text-gray-300 w-5 flex-shrink-0">{idx + 1}</span>
+            <FileIcon className="w-3.5 h-3.5 mr-2.5 text-gray-400 flex-shrink-0" />
+            <div className="truncate text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors cursor-default" title={file.path}>
+              {file.path.split('/').pop()}
+            </div>
+          </div>
+          <span className="text-xs text-gray-400 tabular-nums ml-4 whitespace-nowrap bg-black/5 px-2 py-0.5 rounded opacity-80 group-hover:opacity-100">
+            {formatBytes(file.sizeBytes)}
+          </span>
+        </div>
+      ))}
+      {filteredFiles.length === 0 && (
+        <div className="text-center py-8 text-gray-400 text-sm">
+          No {selectedCategory} files in the top list.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Dashboard() {
   const [currentPath, setCurrentPath] = useState('/data');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
   const { data, isLoading, refetch } = useQuery<StatsResponse>({
     queryKey: ['stats'],
     queryFn: async () => {
@@ -453,7 +477,12 @@ function Dashboard() {
             <PieChartIcon className="w-3.5 h-3.5 mr-2" />
             File Types
           </h3>
-          <FileCategories categories={data.categories} totalSize={data.snapshot.totalSizeBytes} />
+          <FileCategories 
+            categories={data.categories} 
+            totalSize={data.snapshot.totalSizeBytes} 
+            selectedCategory={selectedCategory}
+            onCategorySelect={setSelectedCategory}
+          />
         </div>
       </div>
 
@@ -461,9 +490,12 @@ function Dashboard() {
         <div className="glass rounded-2xl p-6">
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-5 flex items-center">
             <RefreshCw className="w-3.5 h-3.5 mr-2" />
-            Top 10 Largest Files
+            {selectedCategory ? `Top ${selectedCategory} Files` : 'Global Top 10 Largest Files'}
           </h3>
-          <TopFilesList files={data.topFiles} />
+          <TopFilesList 
+            files={data.topFiles} 
+            selectedCategory={selectedCategory} 
+          />
         </div>
         
         <div className="glass rounded-2xl p-6">

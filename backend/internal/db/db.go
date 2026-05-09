@@ -19,6 +19,10 @@ func InitDB(dbPath string) (*sqlx.DB, error) {
 		return nil, fmt.Errorf("failed to create schema: %w", err)
 	}
 
+	if err := migrateSchema(db); err != nil {
+		return nil, fmt.Errorf("failed to migrate schema: %w", err)
+	}
+
 	if err := seedSettings(db); err != nil {
 		return nil, fmt.Errorf("failed to seed settings: %w", err)
 	}
@@ -55,6 +59,7 @@ func createSchema(db *sqlx.DB) error {
 		snapshot_id INTEGER NOT NULL,
 		path TEXT NOT NULL,
 		size_bytes INTEGER NOT NULL,
+		category TEXT NOT NULL DEFAULT 'Other',
 		FOREIGN KEY(snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
 	);
 
@@ -76,6 +81,56 @@ func createSchema(db *sqlx.DB) error {
 
 	_, err := db.Exec(schema)
 	return err
+}
+
+func migrateSchema(db *sqlx.DB) error {
+	// Check if top_files has category column
+	var count int
+	err := db.Get(&count, "SELECT count(*) FROM pragma_table_info('top_files') WHERE name='category'")
+	if err != nil {
+		// Fallback for older sqlite versions
+		rows, err := db.Query("PRAGMA table_info(top_files)")
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		
+		found := false
+		for rows.Next() {
+			var cid int
+			var name, dtype string
+			var notnull, pk int
+			var dfltValue interface{}
+			if err := rows.Scan(&cid, &name, &dtype, &notnull, &dfltValue, &pk); err != nil {
+				continue
+			}
+			if name == "category" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			_, err = db.Exec("ALTER TABLE top_files ADD COLUMN category TEXT NOT NULL DEFAULT 'Other'")
+			if err != nil {
+				return err
+			}
+			_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_top_files_category ON top_files(category)")
+			return err
+		}
+		return nil
+	}
+
+	if count == 0 {
+		log.Println("Migrating database: Adding category column to top_files")
+		_, err = db.Exec("ALTER TABLE top_files ADD COLUMN category TEXT NOT NULL DEFAULT 'Other'")
+		if err != nil {
+			return err
+		}
+		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_top_files_category ON top_files(category)")
+		return err
+	}
+
+	return nil
 }
 
 func seedSettings(db *sqlx.DB) error {

@@ -23,6 +23,7 @@ type TopFile struct {
 	SnapshotID int    `db:"snapshot_id" json:"snapshotId"`
 	Path       string `db:"path" json:"path"`
 	SizeBytes  int64  `db:"size_bytes" json:"sizeBytes"`
+	Category   string `db:"category" json:"category"`
 }
 
 type CategorySnapshot struct {
@@ -48,8 +49,9 @@ type FolderResult struct {
 }
 
 type TopFileResult struct {
-	Path      string
-	SizeBytes int64
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"sizeBytes"`
+	Category  string `json:"category"`
 }
 
 type CategoryResult struct {

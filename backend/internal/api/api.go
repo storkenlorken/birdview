@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
-	"github.com/storken/birdview/internal/models"
-	"github.com/storken/birdview/internal/scanner"
+	"gitlab.qvarnstrom.org/storken/birdview/internal/models"
+	"gitlab.qvarnstrom.org/storken/birdview/internal/scanner"
 )
 
 type API struct {

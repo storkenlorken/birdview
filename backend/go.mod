@@ -1,4 +1,4 @@
-module github.com/storken/birdview
+module gitlab.qvarnstrom.org/storken/birdview
 
 go 1.25.0
 

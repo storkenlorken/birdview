@@ -14,10 +14,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/storken/birdview/internal/api"
-	"github.com/storken/birdview/internal/db"
-	"github.com/storken/birdview/internal/scanner"
-	"github.com/storken/birdview/internal/scheduler"
+	"gitlab.qvarnstrom.org/storken/birdview/internal/api"
+	"gitlab.qvarnstrom.org/storken/birdview/internal/db"
+	"gitlab.qvarnstrom.org/storken/birdview/internal/scanner"
+	"gitlab.qvarnstrom.org/storken/birdview/internal/scheduler"
 )
 
 func main() {

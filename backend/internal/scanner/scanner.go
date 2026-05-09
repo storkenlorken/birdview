@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/storken/birdview/internal/models"
+	"gitlab.qvarnstrom.org/storken/birdview/internal/models"
 )
 
 type Scanner struct {
@@ -72,7 +72,7 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 	
 	mu := sync.Mutex{}
 	folderStats := make(map[string]*models.FolderResult) // Stores DIRECT size initially
-	topFiles := make([]models.TopFileResult, 0, 51)
+	topFiles := make(map[string][]models.TopFileResult)
 	categories := make(map[string]*models.CategoryResult)
 
 	// Work management
@@ -133,7 +133,7 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 
 						// Track categories & top files (protected by mutex)
 						mu.Lock()
-						s.updateFileStats(fullPath, size, &topFiles, categories)
+						s.updateFileStats(fullPath, size, topFiles, categories)
 						mu.Unlock()
 					}
 				}
@@ -168,24 +168,13 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 	return s.saveSnapshot(totalSize, int(totalFiles), durationMs, folderStats, topFiles, categories)
 }
 
-func (s *Scanner) updateFileStats(path string, size int64, topFiles *[]models.TopFileResult, categories map[string]*models.CategoryResult) {
-	// Top Files
-	if len(*topFiles) < 50 || size > (*topFiles)[len(*topFiles)-1].SizeBytes {
-		*topFiles = append(*topFiles, models.TopFileResult{Path: path, SizeBytes: size})
-		sort.Slice(*topFiles, func(i, j int) bool {
-			return (*topFiles)[i].SizeBytes > (*topFiles)[j].SizeBytes
-		})
-		if len(*topFiles) > 50 {
-			*topFiles = (*topFiles)[:50]
-		}
-	}
-
-	// Categories
+func (s *Scanner) updateFileStats(path string, size int64, topFiles map[string][]models.TopFileResult, categories map[string]*models.CategoryResult) {
+	// 1. Determine Category
 	lowerPath := strings.ToLower(path)
 	ext := strings.ToLower(filepath.Ext(path))
 	cat := ""
 
-	// 1. Priority Heuristics (Path-based "Purpose")
+	// Priority Heuristics (Path-based "Purpose")
 	if strings.Contains(lowerPath, "/timemachine/") || strings.Contains(lowerPath, "/backups/") || 
 	   strings.Contains(lowerPath, ".sparsebundle/") || strings.Contains(lowerPath, ".backupbundle/") {
 		cat = "Backups"
@@ -193,7 +182,7 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles *[]models.To
 		cat = "System"
 	}
 
-	// 2. Extension-based ("Format") if no priority match
+	// Extension-based ("Format") if no priority match
 	if cat == "" {
 		switch ext {
 		case ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".m2ts": cat = "Video"
@@ -207,6 +196,20 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles *[]models.To
 		}
 	}
 
+	// 2. Per-Category Top Files (Keep top 50 per category)
+	catTop := topFiles[cat]
+	if len(catTop) < 50 || size > catTop[len(catTop)-1].SizeBytes {
+		catTop = append(catTop, models.TopFileResult{Path: path, SizeBytes: size, Category: cat})
+		sort.Slice(catTop, func(i, j int) bool {
+			return catTop[i].SizeBytes > catTop[j].SizeBytes
+		})
+		if len(catTop) > 50 {
+			catTop = catTop[:50]
+		}
+		topFiles[cat] = catTop
+	}
+
+	// 3. Update Category Stats
 	if _, exists := categories[cat]; !exists {
 		categories[cat] = &models.CategoryResult{Category: cat}
 	}
@@ -239,7 +242,7 @@ func (s *Scanner) propagateSizes(folderStats map[string]*models.FolderResult) {
 	}
 }
 
-func (s *Scanner) saveSnapshot(totalSize int64, totalFiles int, durationMs int64, folderStats map[string]*models.FolderResult, topFiles []models.TopFileResult, categories map[string]*models.CategoryResult) error {
+func (s *Scanner) saveSnapshot(totalSize int64, totalFiles int, durationMs int64, folderStats map[string]*models.FolderResult, topFiles map[string][]models.TopFileResult, categories map[string]*models.CategoryResult) error {
 	tx, err := s.db.Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -253,7 +256,7 @@ func (s *Scanner) saveSnapshot(totalSize int64, totalFiles int, durationMs int64
 	}
 	snapshotID, _ := res.LastInsertId()
 
-	// Batch insert folders - using a larger batch size for performance
+	// Batch insert folders
 	stmt, err := tx.Preparex("INSERT INTO folder_snapshots (snapshot_id, path, size_bytes, file_count) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("failed to prepare folder statement: %w", err)
@@ -267,16 +270,18 @@ func (s *Scanner) saveSnapshot(totalSize int64, totalFiles int, durationMs int64
 	}
 	stmt.Close()
 
-	// Batch insert top files
-	stmt, err = tx.Preparex("INSERT INTO top_files (snapshot_id, path, size_bytes) VALUES (?, ?, ?)")
+	// Batch insert top files (all categories)
+	stmt, err = tx.Preparex("INSERT INTO top_files (snapshot_id, path, size_bytes, category) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("failed to prepare top files statement: %w", err)
 	}
-	for _, f := range topFiles {
-		_, err = stmt.Exec(snapshotID, f.Path, f.SizeBytes)
-		if err != nil {
-			stmt.Close()
-			return fmt.Errorf("failed to execute top file insert: %w", err)
+	for _, catList := range topFiles {
+		for _, f := range catList {
+			_, err = stmt.Exec(snapshotID, f.Path, f.SizeBytes, f.Category)
+			if err != nil {
+				stmt.Close()
+				return fmt.Errorf("failed to execute top file insert: %w", err)
+			}
 		}
 	}
 	stmt.Close()
