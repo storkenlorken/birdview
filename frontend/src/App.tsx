@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { Settings, RefreshCw, HardDrive, PieChart as PieChartIcon } from 'lucide-react';
-import ReactECharts from 'echarts-for-react';
 
 const queryClient = new QueryClient();
 
@@ -139,45 +138,67 @@ function MacOSStorageBar({
   );
 }
 
-function TreemapChart({ folders, currentPath, onPathChange }: { folders: FolderSnapshot[], currentPath: string, onPathChange: (path: string) => void }) {
+function SubfolderList({ folders, currentPath, onPathChange }: { folders: FolderSnapshot[], currentPath: string, onPathChange: (path: string) => void }) {
   const subFolders = getFoldersAtDepth(folders, currentPath);
-  const data = subFolders.slice(0, 30).map(f => ({
-    name: f.path.split('/').pop() || f.path,
-    value: f.sizeBytes,
-    path: f.path
-  }));
 
-  const option = {
-    tooltip: {
-      backgroundColor: 'rgba(0,0,0,0.8)',
-      borderColor: 'rgba(255,255,255,0.1)',
-      textStyle: { color: '#fff' },
-      formatter: (params: any) => `${params.name}<br/>${formatBytes(params.value)}`
-    },
-    series: [{
-      type: 'treemap',
-      width: '100%',
-      height: '100%',
-      roam: false,
-      nodeClick: false,
-      breadcrumb: { show: false },
-      label: { show: true, formatter: '{b}' },
-      itemStyle: { gapWidth: 1, borderColor: 'transparent' },
-      data: data
-    }]
-  };
+  if (subFolders.length === 0) {
+    return <p className="text-sm text-muted-foreground text-center py-8">No subfolders found in this directory.</p>;
+  }
+
+  const largest = subFolders[0].sizeBytes || 1;
+
+  const colors = [
+    'bg-[#ff3b30]', 'bg-[#007aff]', 'bg-[#ffcc00]',
+    'bg-[#4cd964]', 'bg-[#ff9500]', 'bg-[#af52de]', 'bg-[#8e8e93]',
+  ];
 
   return (
-    <div className="h-[300px] w-full">
-      <ReactECharts 
-        option={option} 
-        style={{ height: '100%', width: '100%' }}
-        onEvents={{
-          'click': (params: any) => {
-            if (params.data && params.data.path) onPathChange(params.data.path);
-          }
-        }}
-      />
+    <div className="space-y-1">
+      {subFolders.map((folder, i) => {
+        const name = folder.path.split('/').pop() || folder.path;
+        const pct = (folder.sizeBytes / largest) * 100;
+        const hasChildren = folders.some(f =>
+          f.path !== folder.path && f.path.startsWith(folder.path + '/')
+        );
+
+        return (
+          <button
+            key={folder.path}
+            onClick={() => hasChildren && onPathChange(folder.path)}
+            className={`w-full text-left group rounded-xl px-4 py-3 transition-all ${
+              hasChildren
+                ? 'hover:bg-white/5 cursor-pointer'
+                : 'cursor-default opacity-70'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center space-x-3 min-w-0">
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${colors[i % colors.length]}`} />
+                <span className="text-sm font-medium truncate group-hover:text-blue-400 transition-colors">
+                  {name}
+                </span>
+                {hasChildren && (
+                  <span className="text-[10px] text-muted-foreground/50 bg-white/5 px-1.5 py-0.5 rounded">▶</span>
+                )}
+              </div>
+              <div className="flex items-center space-x-3 ml-4 flex-shrink-0">
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {folder.fileCount.toLocaleString()} files
+                </span>
+                <span className="text-sm font-semibold tabular-nums w-20 text-right">
+                  {formatBytes(folder.sizeBytes)}
+                </span>
+              </div>
+            </div>
+            <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+              <div
+                className={`h-full ${colors[i % colors.length]} transition-all duration-500`}
+                style={{ width: `${pct}%`, opacity: 0.7 }}
+              />
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -417,12 +438,18 @@ function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="glass rounded-2xl p-6 border border-white/10 lg:col-span-2">
-          <h3 className="text-lg font-medium mb-4 flex items-center"><PieChartIcon className="w-4 h-4 mr-2 text-blue-500" /> Storage Hierarchy</h3>
-          <TreemapChart folders={data.folders} currentPath={currentPath} onPathChange={setCurrentPath} />
+          <h3 className="text-lg font-medium mb-4 flex items-center">
+            <HardDrive className="w-4 h-4 mr-2 text-blue-500" />
+            Subfolders
+            <span className="ml-2 text-xs text-muted-foreground font-normal">
+              — click to drill down
+            </span>
+          </h3>
+          <SubfolderList folders={data.folders} currentPath={currentPath} onPathChange={setCurrentPath} />
         </div>
 
         <div className="glass rounded-2xl p-6 border border-white/10">
-          <h3 className="text-lg font-medium mb-4 flex items-center"><HardDrive className="w-4 h-4 mr-2 text-yellow-500" /> File Types</h3>
+          <h3 className="text-lg font-medium mb-4 flex items-center"><PieChartIcon className="w-4 h-4 mr-2 text-yellow-500" /> File Types</h3>
           <FileCategories categories={data.categories} totalSize={data.snapshot.totalSizeBytes} />
         </div>
       </div>
