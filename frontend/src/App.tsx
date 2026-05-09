@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useTransition } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { RefreshCw, HardDrive, PieChart as PieChartIcon, ChevronRight, File as FileIcon } from 'lucide-react';
 
@@ -314,20 +314,14 @@ function TopFilesList({ files, limit = 10, selectedCategory }: { files: TopFile[
 function Dashboard() {
   const [currentPath, setCurrentPath] = useState('/data');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [isNavigating, setIsNavigating] = useState(false);
   const [navDirection, setNavDirection] = useState<'forward' | 'back'>('forward');
+  const [isPending, startTransition] = useTransition();
 
   const handlePathChange = (newPath: string) => {
-    // Determine direction: if new path is longer, we are going deeper (forward)
     setNavDirection(newPath.length > currentPath.length ? 'forward' : 'back');
-    setIsNavigating(true);
-    // Give the browser 50ms to definitely render the spinner
-    setTimeout(() => {
+    startTransition(() => {
       setCurrentPath(newPath);
-      // We wrap the "off" state in another small delay so it doesn't 
-      // flick off the instant the render starts
-      setTimeout(() => setIsNavigating(false), 50);
-    }, 50);
+    });
   };
 
   const { data, isLoading, refetch } = useQuery<StatsResponse>({
@@ -435,7 +429,7 @@ function Dashboard() {
   return (
     <div className="relative space-y-8 pb-12">
       {/* Smart Loading Overlay - Only appears if loading takes > 300ms */}
-      <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-white/60 backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0 ${isNavigating ? 'opacity-100 pointer-events-auto delay-300' : 'delay-0'}`}>
+      <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-white/60 backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0 ${isPending ? 'opacity-100 pointer-events-auto delay-300' : 'delay-0'}`}>
         <div className="bg-white p-5 rounded-2xl shadow-xl border border-black/5 flex items-center space-x-3">
           <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
           <span className="text-sm font-medium text-gray-600">Loading...</span>
