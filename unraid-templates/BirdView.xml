@@ -15,7 +15,7 @@
   <Category>Tools: System: Status: Storage:</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/storkenlorken/birdview/main/unraid-templates/BirdView.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/storkenlorken/birdview/main/frontend/public/logo_cropped.png</Icon>
+  <Icon>https://raw.githubusercontent.com/storkenlorken/birdview/main/frontend/public/logo.png</Icon>
   <ExtraParams>--restart unless-stopped</ExtraParams>
   <PostArgs/>
   <CPUset/>
