@@ -44,7 +44,7 @@ Just copy this into your `docker-compose.yml`:
 version: '3.8'
 services:
   birdview:
-    image: storkenlorken/birdview
+    image: storken/birdview
     ports:
       - "8080:8080"
     volumes:
