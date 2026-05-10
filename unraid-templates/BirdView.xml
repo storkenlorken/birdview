@@ -15,7 +15,7 @@
   <Category>Tools: System: Status: Storage:</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/storkenlorken/birdview/main/unraid-templates/BirdView.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/storkenlorken/birdview/main/frontend/public/favicon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/storkenlorken/birdview/main/frontend/public/logo_cropped.png</Icon>
   <ExtraParams>--restart unless-stopped</ExtraParams>
   <PostArgs/>
   <CPUset/>
@@ -41,7 +41,7 @@
     </Volume>
     <Volume>
       <HostDir>/mnt/user/appdata/birdview</HostDir>
-      <ContainerDir>/app/db</ContainerDir>
+      <ContainerDir>/app/data</ContainerDir>
       <Mode>rw</Mode>
     </Volume>
   </Data>
@@ -60,6 +60,6 @@
   <Labels/>
   <Config Name="Web UI Port" Target="8080" Default="8080" Mode="tcp" Description="The port the dashboard is accessible on." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
   <Config Name="Storage to Scan" Target="/data" Default="/mnt/user" Mode="ro" Description="The root path you want BirdView to scan and visualize." Type="Path" Display="always" Required="true" Mask="false">/mnt/user</Config>
-  <Config Name="AppData (Database)" Target="/app/db" Default="/mnt/user/appdata/birdview" Mode="rw" Description="Location for the SQLite database to store history." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/birdview</Config>
+  <Config Name="AppData (Database)" Target="/app/data" Default="/mnt/user/appdata/birdview" Mode="rw" Description="Location for the SQLite database to store history." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/birdview</Config>
   <Config Name="Scan Interval (Days)" Target="BIRDVIEW_SCAN_INTERVAL_DAYS" Default="7" Mode="" Description="How often (in days) BirdView should automatically scan your array." Type="Variable" Display="always" Required="false" Mask="false">7</Config>
 </Container>
