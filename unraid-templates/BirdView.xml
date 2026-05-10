@@ -7,7 +7,7 @@
   <MyIP/>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
-  <Support>[PASTE_YOUR_FORUM_LINK_HERE]</Support>
+  <Support>https://forums.unraid.net/topic/198701-support-storken-birdview/</Support>
   <Project>https://github.com/storkenlorken/birdview</Project>
   <Overview>
     BirdView is a modern, blazing-fast storage visualization dashboard. It allows you to explore your Unraid shares, identify space wasters by category (Video, Backups, etc.), and track storage trends over time with historical snapshots.
