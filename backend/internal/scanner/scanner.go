@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -123,7 +124,14 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 						if err != nil {
 							continue
 						}
-						size := info.Size()
+						// Use actual disk blocks like `du` — correctly handles sparse files
+					// (e.g. Colima VM disks, Time Machine bundles). Blocks are 512-byte units.
+					var size int64
+					if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+						size = stat.Blocks * 512
+					} else {
+						size = info.Size() // fallback for non-POSIX
+					}
 						atomic.AddInt64(&totalSize, size)
 						atomic.AddInt64(&totalFiles, 1)
 						atomic.AddInt64(&s.FilesScanned, 1)

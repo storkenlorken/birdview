@@ -3,6 +3,8 @@ package db
 import (
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite"
@@ -134,20 +136,32 @@ func migrateSchema(db *sqlx.DB) error {
 }
 
 func seedSettings(db *sqlx.DB) error {
-	// Check if exclusions exist
+	// 1. Exclusions
 	var count int
 	err := db.Get(&count, "SELECT COUNT(*) FROM settings WHERE key = 'exclusions'")
-	if err != nil {
-		return err
-	}
-
-	// Default exclusions requested by user
-	if count == 0 {
+	if err == nil && count == 0 {
 		defaultExclusions := `[".git", ".DS_Store", "node_modules", "venv", ".venv"]`
 		_, err = db.Exec("INSERT INTO settings (key, value) VALUES ('exclusions', ?)", defaultExclusions)
 		if err != nil {
 			log.Printf("Warning: Could not seed default exclusions: %v", err)
 		}
 	}
+
+	// 2. Scan Interval
+	err = db.Get(&count, "SELECT COUNT(*) FROM settings WHERE key = 'scan_interval_days'")
+	if err == nil && count == 0 {
+		// Get from env or default to 7
+		intervalDays := 7
+		if envDays := os.Getenv("BIRDVIEW_SCAN_INTERVAL_DAYS"); envDays != "" {
+			if val, err := strconv.Atoi(envDays); err == nil && val > 0 {
+				intervalDays = val
+			}
+		}
+		_, err = db.Exec("INSERT INTO settings (key, value) VALUES ('scan_interval_days', ?)", fmt.Sprintf("%d", intervalDays))
+		if err != nil {
+			log.Printf("Warning: Could not seed default scan interval: %v", err)
+		}
+	}
+
 	return nil
 }

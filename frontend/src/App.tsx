@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useTransition } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { RefreshCw, HardDrive, PieChart as PieChartIcon, ChevronRight, File as FileIcon, History, Calendar, Clock, Trash2 } from 'lucide-react';
+import { RefreshCw, HardDrive, PieChart as PieChartIcon, ChevronRight, File as FileIcon, History, Calendar, Clock, Trash2, Shield, Activity, Info, Plus, X } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 
 const queryClient = new QueryClient();
@@ -45,6 +45,7 @@ interface StatsResponse {
   currentPath: string;
   startTime: string;
   nextScanTime: string;
+  dataPathError: string;
 }
 
 // Helpers
@@ -320,6 +321,7 @@ function Dashboard() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [navDirection, setNavDirection] = useState<'forward' | 'back'>('forward');
   const [isPending, startTransition] = useTransition();
+  const [isStarting, setIsStarting] = useState(false);
 
   const handlePathChange = (newPath: string) => {
     setNavDirection(newPath.length > currentPath.length ? 'forward' : 'back');
@@ -335,8 +337,13 @@ function Dashboard() {
       if (!res.ok) throw new Error('Network response was not ok');
       return res.json();
     },
-    refetchInterval: 10000,
+    refetchInterval: 3000,
   });
+
+  // Clear the optimistic "starting" state once the backend confirms scanning
+  useEffect(() => {
+    if (data?.isScanning) setIsStarting(false);
+  }, [data?.isScanning]);
 
   useEffect(() => {
     if (data?.folders && currentPath === '/data') {
@@ -348,8 +355,9 @@ function Dashboard() {
   }, [data, currentPath]);
 
   const startScan = async () => {
+    setIsStarting(true); // Immediate feedback
     await fetch('/api/scan/start', { method: 'POST' });
-    setTimeout(refetch, 2000);
+    refetch(); // Refetch immediately instead of waiting 2s
   };
 
   if (isLoading) {
@@ -430,9 +438,83 @@ function Dashboard() {
 
   const currentFolder = data.folders.find(f => f.path === currentPath) || { sizeBytes: data.snapshot.totalSizeBytes };
 
+  // Detect an "empty scan" — scan ran but found nothing (permission issue, wrong mount, etc.)
+  const isEmptyScan = data.snapshot && data.snapshot.totalSizeBytes === 0 && data.folders.length === 0;
+
+  if (isEmptyScan && !data.isScanning) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 max-w-lg mx-auto text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="relative">
+          <div className="absolute inset-0 bg-orange-500/15 blur-3xl rounded-full animate-pulse" />
+          <div className="relative w-20 h-20 rounded-3xl bg-orange-50 border border-orange-100 flex items-center justify-center shadow-lg">
+            <svg className="w-10 h-10 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Scan found 0 files</h2>
+          <p className="text-gray-500 leading-relaxed">
+            The scan completed, but BirdView couldn't read any files. This is usually a <span className="font-semibold text-gray-700">permissions issue</span> — the scanner doesn't have access to the mounted directory.
+          </p>
+        </div>
+
+        <div className="w-full bg-black/[0.02] border border-black/5 rounded-2xl p-5 text-left space-y-3">
+          <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Common Fixes</p>
+          <div className="space-y-3">
+            <div className="flex items-start space-x-3">
+              <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</div>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Run as root (Mac / Colima)</p>
+                <p className="text-xs text-gray-500 mt-0.5">Set <span className="font-mono bg-black/5 px-1 rounded">PUID=0</span> and <span className="font-mono bg-black/5 px-1 rounded">PGID=0</span> in your <span className="font-mono bg-black/5 px-1 rounded">docker-compose.yml</span></p>
+              </div>
+            </div>
+            <div className="flex items-start space-x-3">
+              <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</div>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Check your volume mount</p>
+                <p className="text-xs text-gray-500 mt-0.5">Run <span className="font-mono bg-black/5 px-1 rounded">docker exec -it birdview ls /data</span> to confirm the folder is accessible</p>
+              </div>
+            </div>
+            <div className="flex items-start space-x-3">
+              <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</div>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Unraid: match the correct PUID/PGID</p>
+                <p className="text-xs text-gray-500 mt-0.5">Use the UID of your media user — typically <span className="font-mono bg-black/5 px-1 rounded">99</span> / <span className="font-mono bg-black/5 px-1 rounded">100</span> on Unraid</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={startScan}
+          disabled={data.isScanning}
+          className="flex items-center space-x-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+        >
+          <RefreshCw className="w-4 h-4" />
+          <span>Re-run Scan</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="relative space-y-8 pb-12">
-      {/* Smart Loading Overlay - Only appears if loading takes > 300ms */}
+      {/* Data path error banner */}
+      {data.dataPathError && (
+        <div className="flex items-start space-x-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm">
+          <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <div className="min-w-0">
+            <p className="font-semibold text-amber-800">Data path error</p>
+            <p className="text-amber-700 mt-0.5 font-mono text-xs break-all">{data.dataPathError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Smart Loading Overlay */}
       <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-white/60 backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0 ${isPending ? 'opacity-100 pointer-events-auto delay-300' : 'delay-0'}`}>
         <div className="bg-white p-5 rounded-2xl shadow-xl border border-black/5 flex items-center space-x-3">
           <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
@@ -452,24 +534,39 @@ function Dashboard() {
             </p>
           </div>
           <div className="flex items-center space-x-3">
-            {data.isScanning && (
-              <div className="flex items-center space-x-2 text-xs font-medium text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
-                <RefreshCw className="w-3 h-3 animate-spin" />
-                <span>Scanning: {data.filesScanned.toLocaleString()} files...</span>
-              </div>
-            )}
             <button
               onClick={startScan}
-              disabled={data.isScanning}
-              className={`p-2.5 rounded-xl transition-all border ${data.isScanning
+              disabled={isStarting || data.isScanning}
+              className={`p-2.5 rounded-xl transition-all border ${(isStarting || data.isScanning)
                 ? 'opacity-50 cursor-not-allowed bg-gray-100 border-gray-200'
-                : 'hover:bg-gray-100 bg-white border-gray-200 shadow-sm'
+                : 'hover:bg-gray-100 bg-white border-gray-200 shadow-sm active:scale-95'
                 }`}
             >
-              <RefreshCw className={`w-4 h-4 ${data.isScanning ? 'animate-spin text-blue-600' : 'text-gray-500'}`} />
+              <RefreshCw className={`w-4 h-4 ${(isStarting || data.isScanning) ? 'animate-spin text-blue-600' : 'text-gray-500'}`} />
             </button>
           </div>
         </div>
+
+        {/* Slim Live Scan Strip */}
+        {data.isScanning && (() => {
+          const elapsedSec = (new Date().getTime() - new Date(data.startTime).getTime()) / 1000;
+          const filesPerSec = Math.round(data.filesScanned / (elapsedSec || 1));
+          return (
+            <div className="flex items-center justify-between text-xs text-blue-500 bg-blue-50/70 border border-blue-100 rounded-xl px-4 py-2.5">
+              <div className="flex items-center space-x-2 min-w-0">
+                <RefreshCw className="w-3 h-3 animate-spin flex-shrink-0" />
+                <span className="font-mono truncate text-blue-400/80" dir="rtl">{data.currentPath || '…'}</span>
+              </div>
+              <div className="flex items-center space-x-3 ml-4 flex-shrink-0 font-medium tabular-nums">
+                <span>{data.filesScanned.toLocaleString()} files</span>
+                <span className="text-blue-300">·</span>
+                <span>{formatBytes(data.bytesScanned)}</span>
+                <span className="text-blue-300">·</span>
+                <span className="text-blue-400">{filesPerSec.toLocaleString()}/s</span>
+              </div>
+            </div>
+          );
+        })()}
 
         <MacOSStorageBar
           folders={data.folders}
@@ -856,8 +953,193 @@ function HistoryView({ onOpenDeleteModal }: { onOpenDeleteModal: (s: Snapshot) =
   );
 }
 
+function SettingsView() {
+  const [activeSection, setActiveSection] = useState<'general' | 'exclusions' | 'about'>('general');
+  const { data: settings, isLoading, refetch } = useQuery<Record<string, any>>({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings');
+      return res.json();
+    }
+  });
+
+  const updateSettings = async (newSettings: Record<string, any>) => {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSettings)
+    });
+    refetch();
+    // Invalidate stats so the dashboard updates (e.g. Next Scan Time)
+    queryClient.invalidateQueries({ queryKey: ['stats'] });
+  };
+
+  if (isLoading || !settings) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="w-8 h-8 text-blue-500 animate-spin opacity-40" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass rounded-3xl overflow-hidden flex min-h-[600px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Sidebar */}
+      <div className="w-64 bg-black/[0.02] border-r border-black/5 p-4 flex flex-col space-y-1">
+        <button
+          onClick={() => setActiveSection('general')}
+          className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${activeSection === 'general' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'text-gray-600 hover:bg-black/5'}`}
+        >
+          <Activity className="w-4 h-4" />
+          <span>General</span>
+        </button>
+        <button
+          onClick={() => setActiveSection('exclusions')}
+          className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${activeSection === 'exclusions' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'text-gray-600 hover:bg-black/5'}`}
+        >
+          <Shield className="w-4 h-4" />
+          <span>Exclusions</span>
+        </button>
+        <button
+          onClick={() => setActiveSection('about')}
+          className={`flex items-center space-x-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${activeSection === 'about' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'text-gray-600 hover:bg-black/5'}`}
+        >
+          <Info className="w-4 h-4" />
+          <span>About</span>
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 p-8 overflow-y-auto">
+        {activeSection === 'general' && (
+          <div className="space-y-8 animate-in fade-in duration-300">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-1">General Settings</h2>
+              <p className="text-sm text-gray-500">Configure how BirdView behaves on your server.</p>
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-black/[0.01] border border-black/5 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-semibold text-gray-800">Scan Interval</label>
+                    <p className="text-xs text-gray-500">How many days between automatic storage maps.</p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="range"
+                      min="1"
+                      max="30"
+                      value={settings.scan_interval_days || 7}
+                      onChange={(e) => updateSettings({ scan_interval_days: parseInt(e.target.value) })}
+                      className="w-32 accent-blue-500"
+                    />
+                    <span className="text-sm font-mono font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md min-w-[40px] text-center">
+                      {settings.scan_interval_days || 7}d
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === 'exclusions' && (
+          <div className="space-y-8 animate-in fade-in duration-300">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-1">Scan Exclusions</h2>
+              <p className="text-sm text-gray-500">BirdView will ignore any folders or files matching these names.</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex space-x-2">
+                <input
+                  id="new-exclusion"
+                  type="text"
+                  placeholder="e.g. node_modules, .git, venv"
+                  className="flex-1 bg-black/[0.02] border border-black/5 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const input = e.currentTarget;
+                      if (input.value.trim()) {
+                        const current = settings.exclusions || [];
+                        if (!current.includes(input.value.trim())) {
+                          updateSettings({ exclusions: [...current, input.value.trim()] });
+                        }
+                        input.value = '';
+                      }
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById('new-exclusion') as HTMLInputElement;
+                    if (input.value.trim()) {
+                      const current = settings.exclusions || [];
+                      if (!current.includes(input.value.trim())) {
+                        updateSettings({ exclusions: [...current, input.value.trim()] });
+                      }
+                      input.value = '';
+                    }
+                  }}
+                  className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-xl transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="bg-black/[0.01] border border-black/5 rounded-2xl overflow-hidden">
+                {(settings.exclusions || []).length === 0 ? (
+                  <div className="p-8 text-center text-gray-400 text-sm italic">No exclusions configured.</div>
+                ) : (
+                  <div className="divide-y divide-black/5">
+                    {(settings.exclusions as string[]).map((ex) => (
+                      <div key={ex} className="flex items-center justify-between px-6 py-3.5 hover:bg-black/[0.01] transition-colors group">
+                        <span className="text-sm font-medium text-gray-700">{ex}</span>
+                        <button
+                          onClick={() => {
+                            const current = settings.exclusions || [];
+                            updateSettings({ exclusions: current.filter((item: string) => item !== ex) });
+                          }}
+                          className="text-gray-300 hover:text-red-500 p-1 rounded-lg transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === 'about' && (
+          <div className="flex flex-col items-center justify-center h-full space-y-6 text-center animate-in fade-in duration-300">
+            <div className="relative">
+              <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full" />
+              <img src="/logo.png" alt="BirdView" className="w-48 h-auto relative" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold text-gray-900">BirdView</h2>
+              <p className="text-sm text-gray-500 font-medium tracking-tight">Version 1.0.0 (Internal Build)</p>
+            </div>
+            <p className="max-w-xs text-sm text-gray-500 leading-relaxed">
+              BirdView is a storage analysis tool built for the modern home server. 
+              Always snappy, always beautiful.
+            </p>
+            <div className="pt-4 text-[10px] text-gray-300 uppercase tracking-widest font-bold">
+              © 2026 STORKENLORKEN
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'settings'>('dashboard');
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deletingDate, setDeletingDate] = useState<string>('');
 
@@ -906,6 +1188,15 @@ function App() {
                   >
                     History
                   </button>
+                  <button
+                    onClick={() => setActiveTab('settings')}
+                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${activeTab === 'settings'
+                      ? 'bg-black/6 text-gray-900'
+                      : 'text-gray-400 hover:text-gray-700 hover:bg-black/4'
+                      }`}
+                  >
+                    Settings
+                  </button>
                 </nav>
               </div>
             </div>
@@ -915,6 +1206,7 @@ function App() {
             <div className="max-w-6xl mx-auto px-6 py-8">
               {activeTab === 'dashboard' && <Dashboard />}
               {activeTab === 'history' && <HistoryView onOpenDeleteModal={openDeleteModal} />}
+              {activeTab === 'settings' && <SettingsView />}
             </div>
           </main>
         </div>

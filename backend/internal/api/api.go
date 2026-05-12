@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -34,6 +35,63 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	r.Delete("/history/{id}", a.deleteSnapshot)
 	r.Post("/scan/start", a.startScan)
 	r.Get("/settings", a.getSettings)
+	r.Post("/settings", a.updateSettings)
+}
+
+// ... existing handlers ...
+
+func (a *API) updateSettings(w http.ResponseWriter, r *http.Request) {
+	var settings map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := a.db.Beginx()
+	if err != nil {
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	for k, v := range settings {
+		valBytes, _ := json.Marshal(v)
+		_, err = tx.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", k, string(valBytes))
+		if err != nil {
+			http.Error(w, "Failed to update settings", http.StatusInternalServerError)
+			return
+		}
+
+		// Special handling for scan interval
+		if k == "scan_interval_days" {
+			// JSON numbers are float64 in Go map[string]interface{}
+			var days int
+			switch d := v.(type) {
+			case float64:
+				days = int(d)
+			case int:
+				days = d
+			case string:
+				// Sometimes numeric strings are sent
+				if val, err := strconv.Atoi(d); err == nil {
+					days = val
+				}
+			}
+
+			if days > 0 {
+				newInterval := time.Duration(days) * 24 * time.Hour
+				a.scheduler.UpdateInterval(newInterval)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Failed to commit settings", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "Settings updated"})
 }
 
 func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
@@ -59,16 +117,17 @@ func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"snapshot":     nil,
-		"folders":      folders,
-		"topFiles":     topFiles,
-		"categories":   categories,
-		"isScanning":   a.scanner.IsRunning,
-		"filesScanned": a.scanner.FilesScanned,
-		"bytesScanned": a.scanner.BytesScanned,
-		"currentPath":  a.scanner.CurrentPath,
-		"startTime":    a.scanner.StartTime,
-		"nextScanTime": a.scheduler.NextScanTime,
+		"snapshot":      nil,
+		"folders":       folders,
+		"topFiles":      topFiles,
+		"categories":    categories,
+		"isScanning":    a.scanner.IsRunning,
+		"filesScanned":  a.scanner.FilesScanned,
+		"bytesScanned":  a.scanner.BytesScanned,
+		"currentPath":   a.scanner.CurrentPath,
+		"startTime":     a.scanner.StartTime,
+		"nextScanTime":  a.scheduler.NextScanTime,
+		"dataPathError": a.scheduler.DataPathError,
 	}
 	if hasSnapshot {
 		response["snapshot"] = snapshot

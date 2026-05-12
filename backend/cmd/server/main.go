@@ -51,14 +51,20 @@ func main() {
 	scanService := scanner.NewScanner(database)
 	sched := scheduler.NewScheduler(scanService, database)
 	
-	// Get scan interval from env (default to 7 days)
+	// Get scan interval from DB or env (default to 7 days)
 	intervalDays := 7
-	if envDays := os.Getenv("BIRDVIEW_SCAN_INTERVAL_DAYS"); envDays != "" {
+	var dbIntervalStr string
+	err = database.Get(&dbIntervalStr, "SELECT value FROM settings WHERE key = 'scan_interval_days'")
+	if err == nil {
+		if val, err := strconv.Atoi(dbIntervalStr); err == nil && val > 0 {
+			intervalDays = val
+		}
+	} else if envDays := os.Getenv("BIRDVIEW_SCAN_INTERVAL_DAYS"); envDays != "" {
 		if val, err := strconv.Atoi(envDays); err == nil && val > 0 {
 			intervalDays = val
 		}
 	}
-	
+
 	scanInterval := time.Duration(intervalDays) * 24 * time.Hour
 	log.Printf("Starting scheduler with interval: %v days (%v)", intervalDays, scanInterval)
 
