@@ -1,5 +1,5 @@
 import { useState, useEffect, useTransition } from 'react';
-import { RefreshCw, HardDrive, PieChart as PieChartIcon, LayoutGrid, List } from 'lucide-react';
+import { RefreshCw, HardDrive, PieChart as PieChartIcon, LayoutGrid, List, Clock, Calendar, Files } from 'lucide-react';
 import { useStats } from '../hooks/useStats';
 import { formatBytes } from '../lib/utils';
 import { Breadcrumbs } from '../components/storage/Breadcrumbs';
@@ -99,7 +99,6 @@ export function Dashboard() {
 
   const currentFolder = data.folders.find(f => f.path === currentPath) || { sizeBytes: data.snapshot.totalSizeBytes };
 
-  // Detect an "empty scan" — scan ran but found nothing (permission issue, wrong mount, etc.)
   const isEmptyScan = data.snapshot && data.snapshot.totalFiles === 0 && !isScanning;
 
   if (isEmptyScan) {
@@ -152,6 +151,8 @@ export function Dashboard() {
       </div>
     );
   }
+
+  return (
     <>
       <div className="relative space-y-8 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
         {/* Banner Section */}
@@ -200,10 +201,38 @@ export function Dashboard() {
           <StorageBar folders={data.folders} totalSize={data.snapshot.totalSizeBytes} currentPath={currentPath} onPathChange={handlePathChange} />
         </div>
 
-        {/* Unified Explorer Grid */}
+        {/* Navigator Section */}
+        <div className="glass rounded-2xl p-1 overflow-hidden">
+          <div className="flex items-center px-6 py-4 border-b border-black/5 bg-black/[0.01]">
+            <HardDrive className="w-4 h-4 mr-2.5 text-gray-400" />
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">Subfolders</h3>
+          </div>
+          <div className="max-h-[380px] overflow-y-auto custom-scrollbar px-6 py-4 bg-white/40">
+            <div key={currentPath} className={navDirection === 'forward' ? 'animate-slide-right' : 'animate-slide-left'}>
+              <SubfolderList folders={data.folders} currentPath={currentPath} onPathChange={handlePathChange} />
+            </div>
+          </div>
+        </div>
+
+        {/* Balanced Dual-Column Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Sidebar: Categories & Analytics */}
-          <div className="lg:col-span-4 space-y-8 lg:sticky lg:top-24">
+          {/* Main Content: Top Files (Left, Spans 8) */}
+          <div className="lg:col-span-8 glass rounded-2xl p-6 min-h-[500px]">
+             <div className="flex items-center justify-between mb-8 px-2">
+                <div className="flex items-center">
+                  <div className="p-1.5 bg-gray-50 rounded-lg mr-3 border border-black/5">
+                    <List className="w-4 h-4 text-gray-500" />
+                  </div>
+                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
+                    {selectedCategory ? `${selectedCategory} Files` : 'Largest Files'}
+                  </h3>
+                </div>
+             </div>
+             <TopFilesList files={data.topFiles} selectedCategory={selectedCategory} />
+          </div>
+
+          {/* Right Sidebar: Utility Stack (Spans 4) */}
+          <div className="lg:col-span-4 space-y-8">
             <div className="glass rounded-2xl p-6">
               <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center">
                 <PieChartIcon className="w-3 h-3 mr-2" />
@@ -212,69 +241,54 @@ export function Dashboard() {
               <FileCategories categories={data.categories} totalSize={data.snapshot.totalSizeBytes} selectedCategory={selectedCategory} onCategorySelect={setSelectedCategory} />
             </div>
 
-            <div className="glass rounded-2xl p-6">
-              <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center">
-                <LayoutGrid className="w-3 h-3 mr-2" />
-                History
-              </h3>
-              <div className="h-[200px] -mx-2">
+            <div className="glass rounded-2xl overflow-hidden">
+              <div className="p-6 pb-0">
+                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center">
+                  <LayoutGrid className="w-3 h-3 mr-2" />
+                  History
+                </h3>
+              </div>
+              <div className="h-[200px] mt-4">
                 <FolderHistoryChart path={currentPath} onSnapshotSelect={handleSnapshotSelect} />
               </div>
             </div>
-          </div>
 
-          {/* Right Main: Subfolders & Top Files */}
-          <div className="lg:col-span-8 space-y-8">
-            <div className="glass rounded-2xl p-1 overflow-hidden">
-              <div className="flex items-center px-6 py-4 border-b border-black/5 bg-black/[0.01]">
-                <HardDrive className="w-4 h-4 mr-2.5 text-gray-400" />
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">Subfolders</h3>
-              </div>
-              <div className="max-h-[380px] overflow-y-auto custom-scrollbar px-6 py-4 bg-white/40">
-                <div key={currentPath} className={navDirection === 'forward' ? 'animate-slide-right' : 'animate-slide-left'}>
-                  <SubfolderList folders={data.folders} currentPath={currentPath} onPathChange={handlePathChange} />
+            <div className="glass rounded-2xl p-6">
+              <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center">
+                <Clock className="w-3 h-3 mr-2" />
+                Scanner Status
+              </h3>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center text-gray-500">
+                    <Calendar className="w-3.5 h-3.5 mr-2 opacity-50" />
+                    <span className="text-xs font-medium">Next Scan</span>
+                  </div>
+                  <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
+                    {(() => {
+                      const diffMs = new Date(data.nextScanTime).getTime() - Date.now();
+                      if (diffMs <= 0) return 'Scanning...';
+                      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                      if (diffDays > 0) return `In ${diffDays} day${diffDays > 1 ? 's' : ''}`;
+                      return 'Soon';
+                    })()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center text-gray-500">
+                    <Clock className="w-3.5 h-3.5 mr-2 opacity-50" />
+                    <span className="text-xs font-medium">Last Index</span>
+                  </div>
+                  <span className="text-xs font-bold text-gray-700">{new Date(data.snapshot.timestamp).toLocaleDateString()}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center text-gray-500">
+                    <Files className="w-3.5 h-3.5 mr-2 opacity-50" />
+                    <span className="text-xs font-medium">Total Files</span>
+                  </div>
+                  <span className="text-xs font-bold text-gray-700">{data.snapshot.totalFiles.toLocaleString()}</span>
                 </div>
               </div>
-            </div>
-
-            <div className="glass rounded-2xl p-6 min-h-[400px]">
-               <div className="flex items-center justify-between mb-8 px-2">
-                  <div className="flex items-center">
-                    <div className="p-1.5 bg-gray-50 rounded-lg mr-3 border border-black/5">
-                      <List className="w-4 h-4 text-gray-500" />
-                    </div>
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
-                      {selectedCategory ? `${selectedCategory} Files` : 'Largest Files'}
-                    </h3>
-                  </div>
-               </div>
-               <TopFilesList files={data.topFiles} selectedCategory={selectedCategory} />
-            </div>
-          </div>
-        </div>
-
-        {/* Scan Information Footer */}
-        <div className="glass rounded-2xl p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-center sm:text-left">
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Next Scan</p>
-              <p className="text-lg font-bold text-blue-600">
-                 {(() => {
-                  const diffMs = new Date(data.nextScanTime).getTime() - Date.now();
-                  if (diffMs <= 0) return 'Scanning...';
-                  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                  if (diffDays > 0) return `In ${diffDays} day${diffDays > 1 ? 's' : ''}`;
-                  return 'Starting Soon';
-                })()}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Last Index</p>
-              <p className="text-lg font-bold text-gray-900">{new Date(data.snapshot.timestamp).toLocaleDateString()}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Files</p>
-              <p className="text-lg font-bold text-gray-900">{data.snapshot.totalFiles.toLocaleString()}</p>
             </div>
           </div>
         </div>
