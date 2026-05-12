@@ -91,7 +91,7 @@ function App() {
           </header>
 
           <main className="flex-1 overflow-y-auto">
-            <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="max-w-6xl mx-auto px-6 pt-10 pb-12">
               {activeTab === 'dashboard' && <Dashboard />}
               {activeTab === 'history' && <HistoryView onOpenDeleteModal={openDeleteModal} />}
               {activeTab === 'settings' && <SettingsView />}

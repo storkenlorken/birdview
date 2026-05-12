@@ -9,7 +9,7 @@ export function SettingsView() {
 
   if (isLoading || !settings) {
     return (
-      <div className="glass rounded-3xl overflow-hidden flex min-h-[600px] animate-in fade-in duration-500">
+      <div className="glass rounded-2xl overflow-hidden flex min-h-[600px] animate-in fade-in duration-700">
         {/* Sidebar Skeleton */}
         <div className="w-64 bg-black/[0.02] border-r border-black/5 p-4 flex flex-col space-y-2">
           <Skeleton className="h-10 w-full rounded-xl" />
@@ -32,7 +32,7 @@ export function SettingsView() {
   }
 
   return (
-    <div className="glass rounded-3xl overflow-hidden flex min-h-[600px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="glass rounded-2xl overflow-hidden flex min-h-[600px] animate-in fade-in slide-in-from-bottom-4 duration-700">
       {/* Sidebar */}
       <div className="w-64 bg-black/[0.02] border-r border-black/5 p-4 flex flex-col space-y-1">
         <button
