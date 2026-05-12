@@ -5,11 +5,15 @@ services:
     build: .
     container_name: birdview
     restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - "8080:8080"
     volumes:
       # Change this to the actual directory you want to scan on your host
-      - /Users/emilqvarnstrom:/data:ro
+      - /mnt/user:/data:ro
       # Persistent volume for BirdView's database and settings
       - birdview_data:/app/data
     environment:

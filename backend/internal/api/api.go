@@ -2,9 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,14 +20,46 @@ type API struct {
 	db        *sqlx.DB
 	scanner   *scanner.Scanner
 	scheduler *scheduler.Scheduler
+	clients   map[chan scanner.ProgressUpdate]bool
+	message   chan scanner.ProgressUpdate
+	clientsMu sync.RWMutex
 }
 
 func NewAPI(db *sqlx.DB, s *scanner.Scanner, sched *scheduler.Scheduler) *API {
-	return &API{
+	api := &API{
 		db:        db,
 		scanner:   s,
 		scheduler: sched,
+		clients:   make(map[chan scanner.ProgressUpdate]bool),
+		message:   make(chan scanner.ProgressUpdate, 100),
 	}
+
+	// Connect scanner to broadcaster (non-blocking)
+	s.OnProgress = func(update scanner.ProgressUpdate) {
+		select {
+		case api.message <- update:
+		default:
+			// Drop if buffer is full (high traffic)
+		}
+	}
+
+	// Start broadcaster
+	go func() {
+		for {
+			msg := <-api.message
+			api.clientsMu.RLock()
+			for client := range api.clients {
+				select {
+				case client <- msg:
+				default:
+					// Client too slow, drop message
+				}
+			}
+			api.clientsMu.RUnlock()
+		}
+	}()
+
+	return api
 }
 
 func (a *API) RegisterRoutes(r chi.Router) {
@@ -36,6 +70,8 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	r.Post("/scan/start", a.startScan)
 	r.Get("/settings", a.getSettings)
 	r.Post("/settings", a.updateSettings)
+	r.Get("/events", a.getEvents)
+	r.Get("/search", a.search)
 }
 
 // ... existing handlers ...
@@ -95,10 +131,17 @@ func (a *API) updateSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
-	// Get latest snapshot
+	snapshotID := r.URL.Query().Get("id")
 	var snapshot models.Snapshot
 	hasSnapshot := true
-	err := a.db.Get(&snapshot, "SELECT * FROM snapshots ORDER BY timestamp DESC LIMIT 1")
+	var err error
+
+	if snapshotID != "" {
+		err = a.db.Get(&snapshot, "SELECT * FROM snapshots WHERE id = ?", snapshotID)
+	} else {
+		err = a.db.Get(&snapshot, "SELECT * FROM snapshots ORDER BY timestamp DESC LIMIT 1")
+	}
+
 	if err != nil {
 		hasSnapshot = false
 	}
@@ -157,13 +200,14 @@ func (a *API) getFolderHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type HistoryPoint struct {
-		Timestamp time.Time `db:"timestamp" json:"timestamp"`
-		SizeBytes int64     `db:"size_bytes" json:"sizeBytes"`
+		SnapshotID int       `db:"snapshot_id" json:"snapshotId"`
+		Timestamp  time.Time `db:"timestamp" json:"timestamp"`
+		SizeBytes  int64     `db:"size_bytes" json:"sizeBytes"`
 	}
 	var history []HistoryPoint
 
 	query := `
-		SELECT s.timestamp, fs.size_bytes 
+		SELECT s.id as snapshot_id, s.timestamp, fs.size_bytes 
 		FROM folder_snapshots fs
 		JOIN snapshots s ON fs.snapshot_id = s.id
 		WHERE fs.path = ?
@@ -240,4 +284,100 @@ func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(res)
+}
+
+func (a *API) getEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	client := make(chan scanner.ProgressUpdate, 10)
+	a.clientsMu.Lock()
+	a.clients[client] = true
+	a.clientsMu.Unlock()
+
+	defer func() {
+		a.clientsMu.Lock()
+		delete(a.clients, client)
+		a.clientsMu.Unlock()
+		close(client)
+	}()
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	// Send initial state
+	if a.scanner.IsRunning {
+		initial := scanner.ProgressUpdate{
+			FilesScanned: a.scanner.FilesScanned,
+			BytesScanned: a.scanner.BytesScanned,
+			CurrentPath:  a.scanner.CurrentPath,
+			IsRunning:    true,
+			StartTime:    a.scanner.StartTime,
+		}
+		data, _ := json.Marshal(initial)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+
+	for {
+		select {
+		case msg := <-client:
+			data, _ := json.Marshal(msg)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		case <-r.Context().Done():
+			return
+		}
+	}
+}
+
+func (a *API) search(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		json.NewEncoder(w).Encode([]interface{}{})
+		return
+	}
+
+	// Find latest snapshot ID
+	var snapshotID int
+	err := a.db.Get(&snapshotID, "SELECT id FROM snapshots ORDER BY timestamp DESC LIMIT 1")
+	if err != nil {
+		json.NewEncoder(w).Encode([]interface{}{})
+		return
+	}
+
+	type SearchResult struct {
+		Path      string `json:"path"`
+		SizeBytes int64  `json:"sizeBytes"`
+		Type      string `json:"type"` // 'folder' or 'file'
+	}
+	results := []SearchResult{}
+
+	// Search folders
+	var folders []struct {
+		Path      string `db:"path"`
+		SizeBytes int64  `db:"size_bytes"`
+	}
+	a.db.Select(&folders, "SELECT path, size_bytes FROM folder_snapshots WHERE snapshot_id = ? AND path LIKE ? LIMIT 5", snapshotID, "%"+query+"%")
+	for _, f := range folders {
+		results = append(results, SearchResult{Path: f.Path, SizeBytes: f.SizeBytes, Type: "folder"})
+	}
+
+	// Search files
+	var files []struct {
+		Path      string `db:"path"`
+		SizeBytes int64  `db:"size_bytes"`
+	}
+	a.db.Select(&files, "SELECT path, size_bytes FROM top_files WHERE snapshot_id = ? AND path LIKE ? LIMIT 5", snapshotID, "%"+query+"%")
+	for _, f := range files {
+		results = append(results, SearchResult{Path: f.Path, SizeBytes: f.SizeBytes, Type: "file"})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
 }

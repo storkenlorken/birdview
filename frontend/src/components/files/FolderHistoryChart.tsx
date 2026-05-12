@@ -4,10 +4,11 @@ import { formatBytes } from '../../lib/utils';
 
 interface FolderHistoryChartProps {
   path: string;
+  onSnapshotSelect?: (id: number) => void;
 }
 
-export function FolderHistoryChart({ path }: FolderHistoryChartProps) {
-  const { data: history, isLoading } = useQuery<{ timestamp: string, sizeBytes: number }[]>({
+export function FolderHistoryChart({ path, onSnapshotSelect }: FolderHistoryChartProps) {
+  const { data: history, isLoading } = useQuery<{ snapshotId: number, timestamp: string, sizeBytes: number }[]>({
     queryKey: ['folder-history', path],
     queryFn: async () => {
       const res = await fetch(`/api/history/folder?path=${encodeURIComponent(path)}`);
@@ -40,16 +41,21 @@ export function FolderHistoryChart({ path }: FolderHistoryChartProps) {
       trigger: 'axis',
       formatter: (params: any) => {
         const d = params[0];
-        return `<div class="text-[10px] font-bold">${formatBytes(d.value)}</div><div class="text-[9px] opacity-60">${new Date(d.name).toLocaleDateString()}</div>`;
+        return `<div class="text-[10px] font-bold">${formatBytes(d.value)}</div><div class="text-[9px] opacity-60">${new Date(d.name).toLocaleDateString()}</div><div class="text-[8px] text-blue-500 font-bold mt-1 uppercase tracking-tighter">Click to view snapshot</div>`;
       },
-      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-      padding: [4, 8]
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      padding: [6, 10],
+      borderWidth: 0,
+      shadowColor: 'rgba(0,0,0,0.1)',
+      shadowBlur: 10
     },
     series: [{
       data: history.map(h => h.sizeBytes),
       type: 'line',
       smooth: true,
-      symbol: 'none',
+      symbol: 'circle',
+      symbolSize: 4,
+      itemStyle: { color: '#3b82f6' },
       lineStyle: { width: 2, color: '#3b82f6' },
       areaStyle: {
         color: {
@@ -60,5 +66,18 @@ export function FolderHistoryChart({ path }: FolderHistoryChartProps) {
     }]
   };
 
-  return <ReactECharts option={option} style={{ height: '80px', width: '100%' }} />;
+  const onChartClick = (params: any) => {
+    if (onSnapshotSelect && params.dataIndex !== undefined) {
+      const point = history[params.dataIndex];
+      onSnapshotSelect(point.snapshotId);
+    }
+  };
+
+  return (
+    <ReactECharts 
+      option={option} 
+      style={{ height: '80px', width: '100%' }} 
+      onEvents={{ 'click': onChartClick }}
+    />
+  );
 }

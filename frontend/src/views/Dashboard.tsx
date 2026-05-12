@@ -9,14 +9,31 @@ import { FileCategories } from '../components/files/FileCategories';
 import { TopFilesList } from '../components/files/TopFilesList';
 import { FolderHistoryChart } from '../components/files/FolderHistoryChart';
 import { getFoldersAtDepth } from '../lib/utils';
+import { Skeleton } from '../components/ui/Skeleton';
+import { useEvents } from '../hooks/useEvents';
 
 export function Dashboard() {
   const [currentPath, setCurrentPath] = useState('/data');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [navDirection, setNavDirection] = useState<'forward' | 'back'>('forward');
+  const [viewSnapshotId, setViewSnapshotId] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const { data, isLoading, isStarting, startScan } = useStats();
+  const { data, isLoading, isStarting, startScan } = useStats(viewSnapshotId);
+  const liveUpdate = useEvents();
+
+  // Determine if we should show live progress
+  const isScanning = liveUpdate?.isRunning ?? data?.isScanning;
+  const filesScanned = liveUpdate?.isRunning ? liveUpdate.filesScanned : (data?.filesScanned ?? 0);
+  const bytesScanned = liveUpdate?.isRunning ? liveUpdate.bytesScanned : (data?.bytesScanned ?? 0);
+  const livePath = liveUpdate?.isRunning ? liveUpdate.currentPath : data?.currentPath;
+  const startTime = liveUpdate?.isRunning ? liveUpdate.startTime : data?.startTime;
+
+  // Safe duration calculation
+  const getElapsedSeconds = () => {
+    if (!startTime) return 0;
+    return (new Date().getTime() - new Date(startTime).getTime()) / 1000;
+  };
 
   const handlePathChange = (newPath: string) => {
     setNavDirection(newPath.length > currentPath.length ? 'forward' : 'back');
@@ -24,6 +41,28 @@ export function Dashboard() {
       setCurrentPath(newPath);
     });
   };
+
+  const handleSnapshotSelect = (id: number) => {
+    startTransition(() => {
+      setViewSnapshotId(id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  };
+
+  useEffect(() => {
+    const handleJump = (e: any) => {
+      const path = e.detail.path;
+      // If it's a file, we want to jump to its parent folder
+      const targetPath = path.includes('.') && !path.endsWith('/') ? path.substring(0, path.lastIndexOf('/')) : path;
+      
+      startTransition(() => {
+        setViewSnapshotId(null); // Back to live
+        setCurrentPath(targetPath || '/data');
+      });
+    };
+    window.addEventListener('jump-to-path', handleJump);
+    return () => window.removeEventListener('jump-to-path', handleJump);
+  }, []);
 
   useEffect(() => {
     if (data?.folders && currentPath === '/data') {
@@ -36,8 +75,44 @@ export function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <RefreshCw className="animate-spin text-muted-foreground" />
+      <div className="space-y-8 animate-in fade-in duration-500 pb-12">
+        {/* Header Skeleton */}
+        <div className="glass rounded-2xl p-6 sm:p-8 space-y-6">
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <div className="flex gap-4">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+        </div>
+
+        {/* Content Grid Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="glass rounded-2xl p-6 lg:col-span-2 space-y-4">
+            <Skeleton className="h-6 w-32" />
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Skeleton key={i} className="h-12 w-full rounded-xl" />
+              ))}
+            </div>
+          </div>
+          <div className="glass rounded-2xl p-6 space-y-4">
+            <Skeleton className="h-6 w-32" />
+            <div className="space-y-4">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-2 w-full rounded-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -58,9 +133,9 @@ export function Dashboard() {
   }
 
   // If we are scanning for the first time, show a special loading view
-  if (!data.snapshot && data.isScanning) {
-    const elapsedSec = (new Date().getTime() - new Date(data.startTime).getTime()) / 1000;
-    const filesPerSec = Math.round(data.filesScanned / (elapsedSec || 1));
+  if (!data.snapshot && isScanning) {
+    const elapsedSec = getElapsedSeconds();
+    const filesPerSec = Math.round(filesScanned / (elapsedSec || 1));
 
     return (
       <div className="flex flex-col items-center justify-center h-full space-y-8 max-w-2xl mx-auto text-center">
@@ -80,10 +155,10 @@ export function Dashboard() {
           <div className="flex justify-between text-sm font-medium tabular-nums">
             <div className="flex space-x-2">
               <span className="text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
-                {data.filesScanned.toLocaleString()} files
+                {filesScanned.toLocaleString()} files
               </span>
               <span className="text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
-                {formatBytes(data.bytesScanned)} scanned
+                {formatBytes(bytesScanned)} scanned
               </span>
             </div>
             <span className="text-muted-foreground bg-white/5 px-3 py-1 rounded-full border border-white/10">
@@ -98,7 +173,7 @@ export function Dashboard() {
           <div className="glass p-4 rounded-xl border border-white/5 text-left overflow-hidden">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-bold opacity-50">Currently indexing:</div>
             <div className="font-mono text-xs text-blue-400/80 truncate dir-rtl" dir="rtl">
-              {data.currentPath || 'Waiting for path...'}
+              {livePath || 'Waiting for path...'}
             </div>
           </div>
         </div>
@@ -115,7 +190,7 @@ export function Dashboard() {
   // Detect an "empty scan" — scan ran but found nothing (permission issue, wrong mount, etc.)
   const isEmptyScan = data.snapshot && data.snapshot.totalSizeBytes === 0 && data.folders.length === 0;
 
-  if (isEmptyScan && !data.isScanning) {
+  if (isEmptyScan && !isScanning) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 max-w-lg mx-auto text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="relative">
@@ -163,7 +238,7 @@ export function Dashboard() {
 
         <button
           onClick={startScan}
-          disabled={data.isScanning}
+          disabled={isScanning}
           className="flex items-center space-x-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
         >
           <RefreshCw className="w-4 h-4" />
@@ -175,6 +250,27 @@ export function Dashboard() {
 
   return (
     <div className="relative space-y-8 pb-12">
+      {/* History Mode Banner */}
+      {viewSnapshotId && (
+        <div className="flex items-center justify-between bg-blue-500 text-white rounded-2xl px-6 py-4 shadow-lg shadow-blue-500/20 animate-in slide-in-from-top-4 duration-500">
+          <div className="flex items-center space-x-3">
+            <div className="p-1.5 bg-white/20 rounded-lg">
+              <RefreshCw className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider opacity-80">Viewing History</p>
+              <p className="text-sm font-medium">Snapshot from {data?.snapshot && new Date(data.snapshot.timestamp).toLocaleString()}</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setViewSnapshotId(null)}
+            className="px-4 py-2 bg-white text-blue-600 text-xs font-bold rounded-xl hover:bg-white/90 transition-all active:scale-95"
+          >
+            Back to Latest
+          </button>
+        </div>
+      )}
+
       {/* Data path error banner */}
       {data.dataPathError && (
         <div className="flex items-start space-x-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm">
@@ -210,31 +306,31 @@ export function Dashboard() {
           <div className="flex items-center space-x-3">
             <button
               onClick={startScan}
-              disabled={isStarting || data.isScanning}
-              className={`p-2.5 rounded-xl transition-all border ${(isStarting || data.isScanning)
+              disabled={isStarting || isScanning}
+              className={`p-2.5 rounded-xl transition-all border ${(isStarting || isScanning)
                 ? 'opacity-50 cursor-not-allowed bg-gray-100 border-gray-200'
                 : 'hover:bg-gray-100 bg-white border-gray-200 shadow-sm active:scale-95'
                 }`}
             >
-              <RefreshCw className={`w-4 h-4 ${(isStarting || data.isScanning) ? 'animate-spin text-blue-600' : 'text-gray-500'}`} />
+              <RefreshCw className={`w-4 h-4 ${(isStarting || isScanning) ? 'animate-spin text-blue-600' : 'text-gray-500'}`} />
             </button>
           </div>
         </div>
 
         {/* Slim Live Scan Strip */}
-        {data.isScanning && (() => {
-          const elapsedSec = (new Date().getTime() - new Date(data.startTime).getTime()) / 1000;
-          const fPerSec = Math.round(data.filesScanned / (elapsedSec || 1));
+        {isScanning && (() => {
+          const elapsedSec = getElapsedSeconds();
+          const fPerSec = Math.round(filesScanned / (elapsedSec || 1));
           return (
             <div className="flex items-center justify-between text-xs text-blue-500 bg-blue-50/70 border border-blue-100 rounded-xl px-4 py-2.5">
               <div className="flex items-center space-x-2 min-w-0">
                 <RefreshCw className="w-3 h-3 animate-spin flex-shrink-0" />
-                <span className="font-mono truncate text-blue-400/80" dir="rtl">{data.currentPath || '…'}</span>
+                <span className="font-mono truncate text-blue-400/80" dir="rtl">{livePath || '…'}</span>
               </div>
               <div className="flex items-center space-x-3 ml-4 flex-shrink-0 font-medium tabular-nums">
-                <span>{data.filesScanned.toLocaleString()} files</span>
+                <span>{filesScanned.toLocaleString()} files</span>
                 <span className="text-blue-300">·</span>
-                <span>{formatBytes(data.bytesScanned)}</span>
+                <span>{formatBytes(bytesScanned)}</span>
                 <span className="text-blue-300">·</span>
                 <span className="text-blue-400">{fPerSec.toLocaleString()}/s</span>
               </div>
@@ -297,41 +393,49 @@ export function Dashboard() {
             Folder Analytics
           </h3>
           <div className="mb-6">
-            <FolderHistoryChart path={currentPath} />
+            <FolderHistoryChart path={currentPath} onSnapshotSelect={handleSnapshotSelect} />
           </div>
-          <div className="space-y-1">
-            <div className="flex justify-between items-center py-2.5 border-b border-black/5">
-              <span className="text-sm text-gray-400">Next Scan</span>
-              <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-                {(() => {
-                  const diffMs = new Date(data.nextScanTime).getTime() - Date.now();
-                  if (diffMs <= 0) return 'Starting soon...';
-                  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                  const diffMins = Math.floor(diffMs / (1000 * 60));
-                  
-                  if (diffDays > 0) return `in ${diffDays} day${diffDays > 1 ? 's' : ''}`;
-                  if (diffHours > 0) return `in ${diffHours} hour${diffHours > 1 ? 's' : ''}`;
-                  return `in ${diffMins} min${diffMins > 1 ? 's' : ''}`;
-                })()}
-              </span>
-            </div>
-            <div className="flex justify-between items-center py-2.5 border-b border-black/5">
-              <span className="text-sm text-gray-400">Path</span>
-              <span className="font-mono text-xs max-w-[200px] truncate text-gray-600" title={currentPath}>{currentPath}</span>
-            </div>
-            <div className="flex justify-between items-center py-2.5 border-b border-black/5">
-              <span className="text-sm text-gray-400">File Count</span>
-              <span className="text-sm font-semibold text-gray-800">{(currentFolder as any).fileCount?.toLocaleString() || data.snapshot.totalFiles.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center py-2.5 border-b border-black/5">
-              <span className="text-sm text-gray-400">Last Scan</span>
-              <span className="text-sm text-gray-600">{new Date(data.snapshot.timestamp).toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center py-2.5">
-              <span className="text-sm text-gray-400">Scan Duration</span>
-              <span className="text-sm text-gray-600">{data.snapshot.durationMs} ms</span>
-            </div>
+        </div>
+      </div>
+
+      <div className="glass rounded-2xl p-8">
+        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-6 flex items-center">
+          <RefreshCw className="w-3.5 h-3.5 mr-2" />
+          Scan Information
+        </h3>
+
+        <div className="space-y-1 mt-6 border-t border-white/5 pt-6">
+          <div className="flex justify-between items-center py-2.5 border-b border-white/5">
+            <span className="text-sm text-gray-400">Next Scan</span>
+            <span className="text-sm font-medium text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20">
+              {(() => {
+                const diffMs = new Date(data.nextScanTime).getTime() - Date.now();
+                if (diffMs <= 0) return 'Starting soon...';
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffMins = Math.floor(diffMs / (1000 * 60));
+                
+                if (diffDays > 0) return `in ${diffDays} day${diffDays > 1 ? 's' : ''}`;
+                if (diffHours > 0) return `in ${diffHours} hour${diffHours > 1 ? 's' : ''}`;
+                return `in ${diffMins} min${diffMins > 1 ? 's' : ''}`;
+              })()}
+            </span>
+          </div>
+          <div className="flex justify-between items-center py-2.5 border-b border-white/5">
+            <span className="text-sm text-gray-400">Path</span>
+            <span className="font-mono text-xs max-w-[200px] truncate text-gray-500" title={currentPath}>{currentPath}</span>
+          </div>
+          <div className="flex justify-between items-center py-2.5 border-b border-white/5">
+            <span className="text-sm text-gray-400">File Count</span>
+            <span className="text-sm font-semibold text-white">{(currentFolder as any).fileCount?.toLocaleString() || data.snapshot.totalFiles.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between items-center py-2.5 border-b border-white/5">
+            <span className="text-sm text-gray-400">Last Scan</span>
+            <span className="text-sm text-gray-400">{new Date(data.snapshot.timestamp).toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between items-center py-2.5">
+            <span className="text-sm text-gray-400">Scan Duration</span>
+            <span className="text-sm text-gray-400">{data.snapshot.durationMs} ms</span>
           </div>
         </div>
       </div>

@@ -2,17 +2,18 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { StatsResponse } from '../types';
 
-export function useStats() {
+export function useStats(snapshotId?: number | null) {
   const [isStarting, setIsStarting] = useState(false);
 
   const { data, isLoading, refetch } = useQuery<StatsResponse>({
-    queryKey: ['stats'],
+    queryKey: ['stats', snapshotId],
     queryFn: async () => {
-      const res = await fetch('/api/stats');
+      const url = snapshotId ? `/api/stats?id=${snapshotId}` : '/api/stats';
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Network response was not ok');
       return res.json();
     },
-    refetchInterval: 3000,
+    refetchInterval: snapshotId ? false : 3000, // Disable polling when viewing history
   });
 
   // Clear the optimistic "starting" state once the backend confirms scanning

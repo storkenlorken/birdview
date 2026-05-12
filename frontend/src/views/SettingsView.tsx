@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { RefreshCw, Activity, Shield, Info, Plus, X } from 'lucide-react';
+import { Activity, Shield, Info, Plus, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
+import { Skeleton } from '../components/ui/Skeleton';
 
 export function SettingsView() {
   const [activeSection, setActiveSection] = useState<'general' | 'exclusions' | 'about'>('general');
@@ -8,8 +9,24 @@ export function SettingsView() {
 
   if (isLoading || !settings) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="w-8 h-8 text-blue-500 animate-spin opacity-40" />
+      <div className="glass rounded-3xl overflow-hidden flex min-h-[600px] animate-in fade-in duration-500">
+        {/* Sidebar Skeleton */}
+        <div className="w-64 bg-black/[0.02] border-r border-black/5 p-4 flex flex-col space-y-2">
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+        </div>
+        {/* Content Skeleton */}
+        <div className="flex-1 p-8 space-y-6">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <div className="space-y-4 pt-4">
+            <Skeleton className="h-24 w-full rounded-2xl" />
+            <Skeleton className="h-24 w-full rounded-2xl" />
+          </div>
+        </div>
       </div>
     );
   }

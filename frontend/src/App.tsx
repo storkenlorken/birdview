@@ -1,16 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
 import { Dashboard } from './views/Dashboard';
 import { HistoryView } from './views/HistoryView';
 import { SettingsView } from './views/SettingsView';
 import { DeleteModal } from './components/modals/DeleteModal';
+import { SearchPalette } from './components/ui/SearchPalette';
 import type { Snapshot } from './types';
 
 function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'settings'>('dashboard');
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deletingDate, setDeletingDate] = useState<string>('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleSearchSelect = (path: string) => {
+    setActiveTab('dashboard');
+    // Dispatch custom event to let Dashboard know to jump
+    window.dispatchEvent(new CustomEvent('jump-to-path', { detail: { path } }));
+  };
 
   const openDeleteModal = (snapshot: Snapshot) => {
     setDeletingId(snapshot.id);
@@ -86,6 +105,12 @@ function App() {
         date={deletingDate}
         onConfirm={confirmDelete}
         onCancel={() => setDeletingId(null)}
+      />
+
+      <SearchPalette 
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onSelect={handleSearchSelect}
       />
     </QueryClientProvider>
   );

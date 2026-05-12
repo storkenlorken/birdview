@@ -140,7 +140,7 @@ func seedSettings(db *sqlx.DB) error {
 	var count int
 	err := db.Get(&count, "SELECT COUNT(*) FROM settings WHERE key = 'exclusions'")
 	if err == nil && count == 0 {
-		defaultExclusions := `[".git", ".DS_Store", "node_modules", "venv", ".venv"]`
+		defaultExclusions := `[".git", ".DS_Store", "node_modules", "venv", ".venv", ".npm", ".cache", "Library/Caches", "Library/Logs", ".Trash"]`
 		_, err = db.Exec("INSERT INTO settings (key, value) VALUES ('exclusions', ?)", defaultExclusions)
 		if err != nil {
 			log.Printf("Warning: Could not seed default exclusions: %v", err)

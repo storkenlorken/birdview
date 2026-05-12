@@ -1,5 +1,6 @@
 import type { FolderSnapshot } from '../../types';
 import { formatBytes, getFoldersAtDepth } from '../../lib/utils';
+import { STORAGE_BAR_COLORS } from '../../lib/constants';
 
 interface StorageBarProps {
   folders: FolderSnapshot[];
@@ -27,10 +28,7 @@ export function StorageBar({
     categories.push({ id: -1, path: currentPath + '/Other', sizeBytes: otherSize, snapshotId: -1, fileCount: 0 });
   }
 
-  const colors = [
-    'bg-[#ff3b30]', 'bg-[#007aff]', 'bg-[#ffcc00]',
-    'bg-[#4cd964]', 'bg-[#ff9500]', 'bg-[#af52de]', 'bg-[#8e8e93]',
-  ];
+  const colors = STORAGE_BAR_COLORS;
 
   return (
     <div className="space-y-6">

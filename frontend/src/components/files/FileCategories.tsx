@@ -1,5 +1,6 @@
 import type { Category } from '../../types';
 import { formatBytes } from '../../lib/utils';
+import { CATEGORY_COLORS } from '../../lib/constants';
 
 interface FileCategoriesProps {
   categories: Category[];
@@ -13,16 +14,7 @@ export function FileCategories({ categories, totalSize, selectedCategory, onCate
 
   const sorted = [...categories].sort((a, b) => b.sizeBytes - a.sizeBytes);
 
-  const categoryColors: Record<string, string> = {
-    'Video': 'bg-red-500',
-    'Audio': 'bg-blue-500',
-    'Images': 'bg-yellow-500',
-    'Archives': 'bg-green-500',
-    'Documents': 'bg-orange-500',
-    'Backups': 'bg-purple-500',
-    'System': 'bg-cyan-500',
-    'Other': 'bg-gray-400',
-  };
+  const categoryColors = CATEGORY_COLORS;
 
   return (
     <div className="space-y-4">

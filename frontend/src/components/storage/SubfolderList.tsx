@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import type { FolderSnapshot } from '../../types';
 import { formatBytes, getFoldersAtDepth } from '../../lib/utils';
+import { STORAGE_BAR_COLORS } from '../../lib/constants';
 
 interface SubfolderListProps {
   folders: FolderSnapshot[];
@@ -17,10 +18,7 @@ export function SubfolderList({ folders, currentPath, onPathChange }: SubfolderL
 
   const largest = subFolders[0].sizeBytes || 1;
 
-  const colors = [
-    'bg-[#ff3b30]', 'bg-[#007aff]', 'bg-[#ffcc00]',
-    'bg-[#4cd964]', 'bg-[#ff9500]', 'bg-[#af52de]', 'bg-[#8e8e93]',
-  ];
+  const colors = STORAGE_BAR_COLORS;
 
   return (
     <div className="space-y-1">

@@ -16,15 +16,24 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/storkenlorken/birdview/internal/models"
 )
+ 
+type ProgressUpdate struct {
+	FilesScanned int64     `json:"filesScanned"`
+	BytesScanned int64     `json:"bytesScanned"`
+	CurrentPath  string    `json:"currentPath"`
+	IsRunning    bool      `json:"isRunning"`
+	StartTime    time.Time `json:"startTime"`
+}
 
 type Scanner struct {
 	db           *sqlx.DB
-	scanMutex    sync.Mutex
 	IsRunning    bool
 	FilesScanned int64
 	BytesScanned int64
 	CurrentPath  string
 	StartTime    time.Time
+	OnProgress   func(ProgressUpdate)
+	scanMu       sync.Mutex
 }
 
 func NewScanner(db *sqlx.DB) *Scanner {
@@ -34,21 +43,33 @@ func NewScanner(db *sqlx.DB) *Scanner {
 }
 
 func (s *Scanner) RunScan(basePath string) error {
-	if !s.scanMutex.TryLock() {
+	s.scanMu.Lock()
+	if s.IsRunning {
+		s.scanMu.Unlock()
 		return fmt.Errorf("scan already in progress")
 	}
 	s.IsRunning = true
+	s.scanMu.Unlock()
+
 	s.FilesScanned = 0
 	s.BytesScanned = 0
 	s.StartTime = time.Now()
+	if s.OnProgress != nil {
+		s.OnProgress(ProgressUpdate{IsRunning: true, StartTime: s.StartTime})
+	}
 	defer func() {
+		s.scanMu.Lock()
 		s.IsRunning = false
-		s.scanMutex.Unlock()
+		s.scanMu.Unlock()
+		
+		if s.OnProgress != nil {
+			s.OnProgress(ProgressUpdate{IsRunning: false})
+		}
 	}()
 
 	log.Printf("Starting optimized concurrent scan on %s", basePath)
 
-	// Get exclusions
+	// Get exclusions from DB
 	var exclusionsStr string
 	err := s.db.Get(&exclusionsStr, "SELECT value FROM settings WHERE key = 'exclusions'")
 	var exclusions []string
@@ -71,34 +92,45 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 	var totalSize int64
 	var totalFiles int64
 	
-	mu := sync.Mutex{}
-	folderStats := make(map[string]*models.FolderResult) // Stores DIRECT size initially
+	// Work management
+	work := make(chan string, 100000)
+	pending := sync.WaitGroup{}
+	numWorkers := 8
+	
+	// Stats tracking
+	var statsMu sync.Mutex
+	folderStats := make(map[string]*models.FolderResult)
 	topFiles := make(map[string][]models.TopFileResult)
 	categories := make(map[string]*models.CategoryResult)
+	
+	lastReport := time.Now()
 
-	// Work management
-	work := make(chan string, 10000)
-	pending := sync.WaitGroup{}
-
-	numWorkers := 16
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for path := range work {
-				s.CurrentPath = path
-				entries, err := os.ReadDir(path)
+				// Open directory
+				f, err := os.Open(path)
 				if err != nil {
-					log.Printf("Error reading directory %s: %v", path, err)
+					log.Printf("Error opening %s: %v", path, err)
+					pending.Done()
+					continue
+				}
+				entries, err := f.ReadDir(-1)
+				f.Close()
+				
+				if err != nil {
+					log.Printf("Error reading %s: %v", path, err)
 					pending.Done()
 					continue
 				}
 
-				var dirDirectSize int64
-				var dirDirectFiles int
+				var dirSize int64
+				var dirFiles int
 
 				for _, d := range entries {
 					name := d.Name()
+					if name == "." || name == ".." { continue }
 					
-					// Check exclusions
 					excluded := false
 					for _, ex := range exclusions {
 						if name == ex {
@@ -106,9 +138,7 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 							break
 						}
 					}
-					if excluded {
-						continue
-					}
+					if excluded { continue }
 
 					fullPath := filepath.Join(path, name)
 					if d.IsDir() {
@@ -116,44 +146,53 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 						select {
 						case work <- fullPath:
 						default:
-							// Fail-safe if channel is full (unlikely with 10k buffer)
+							// Buffer overflow safety
 							go func(p string) { work <- p }(fullPath)
 						}
 					} else {
 						info, err := d.Info()
-						if err != nil {
-							continue
+						if err != nil { continue }
+						var size int64
+						if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+							size = stat.Blocks * 512
+						} else {
+							size = info.Size()
 						}
-						// Use actual disk blocks like `du` — correctly handles sparse files
-					// (e.g. Colima VM disks, Time Machine bundles). Blocks are 512-byte units.
-					var size int64
-					if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-						size = stat.Blocks * 512
-					} else {
-						size = info.Size() // fallback for non-POSIX
-					}
+						
 						atomic.AddInt64(&totalSize, size)
 						atomic.AddInt64(&totalFiles, 1)
 						atomic.AddInt64(&s.FilesScanned, 1)
 						atomic.AddInt64(&s.BytesScanned, size)
 						
-						dirDirectSize += size
-						dirDirectFiles++
+						dirSize += size
+						dirFiles++
 
-						// Track categories & top files (protected by mutex)
-						mu.Lock()
+						statsMu.Lock()
 						s.updateFileStats(fullPath, size, topFiles, categories)
-						mu.Unlock()
+						statsMu.Unlock()
 					}
 				}
 
-				mu.Lock()
+				statsMu.Lock()
 				folderStats[path] = &models.FolderResult{
 					Path:      path,
-					SizeBytes: dirDirectSize,
-					FileCount: dirDirectFiles,
+					SizeBytes: dirSize,
+					FileCount: dirFiles,
 				}
-				mu.Unlock()
+				
+				// Report progress every 500ms
+				if time.Since(lastReport) > 500*time.Millisecond && s.OnProgress != nil {
+					s.CurrentPath = path
+					s.OnProgress(ProgressUpdate{
+						FilesScanned: atomic.LoadInt64(&s.FilesScanned),
+						BytesScanned: atomic.LoadInt64(&s.BytesScanned),
+						CurrentPath:  path,
+						IsRunning:    true,
+						StartTime:    s.StartTime,
+					})
+					lastReport = time.Now()
+				}
+				statsMu.Unlock()
 				
 				pending.Done()
 			}
@@ -162,13 +201,10 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 
 	pending.Add(1)
 	work <- basePath
-	
-	// Wait for all workers to finish
 	pending.Wait()
 	close(work)
 
-	// PROPAGATION: Bottom-up size aggregation
-	log.Printf("Scan walk finished. Propagating sizes for %d folders...", len(folderStats))
+	log.Printf("Scan walk finished. Propagating sizes...")
 	s.propagateSizes(folderStats)
 
 	durationMs := time.Since(startTime).Milliseconds()
