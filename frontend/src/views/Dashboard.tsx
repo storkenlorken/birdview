@@ -1,5 +1,5 @@
 import { useState, useEffect, useTransition } from 'react';
-import { RefreshCw, HardDrive, PieChart as PieChartIcon } from 'lucide-react';
+import { RefreshCw, HardDrive, PieChart as PieChartIcon, LayoutGrid, List } from 'lucide-react';
 import { useStats } from '../hooks/useStats';
 import { formatBytes } from '../lib/utils';
 import { Breadcrumbs } from '../components/storage/Breadcrumbs';
@@ -24,16 +24,8 @@ export function Dashboard() {
 
   // Determine if we should show live progress
   const isScanning = liveUpdate?.isRunning ?? data?.isScanning;
-  const filesScanned = liveUpdate?.isRunning ? liveUpdate.filesScanned : (data?.filesScanned ?? 0);
   const bytesScanned = liveUpdate?.isRunning ? liveUpdate.bytesScanned : (data?.bytesScanned ?? 0);
   const livePath = liveUpdate?.isRunning ? liveUpdate.currentPath : data?.currentPath;
-  const startTime = liveUpdate?.isRunning ? liveUpdate.startTime : data?.startTime;
-
-  // Safe duration calculation
-  const getElapsedSeconds = () => {
-    if (!startTime) return 0;
-    return (new Date().getTime() - new Date(startTime).getTime()) / 1000;
-  };
 
   const handlePathChange = (newPath: string) => {
     setNavDirection(newPath.length > currentPath.length ? 'forward' : 'back');
@@ -52,11 +44,10 @@ export function Dashboard() {
   useEffect(() => {
     const handleJump = (e: any) => {
       const path = e.detail.path;
-      // If it's a file, we want to jump to its parent folder
       const targetPath = path.includes('.') && !path.endsWith('/') ? path.substring(0, path.lastIndexOf('/')) : path;
       
       startTransition(() => {
-        setViewSnapshotId(null); // Back to live
+        setViewSnapshotId(null);
         setCurrentPath(targetPath || '/data');
       });
     };
@@ -76,41 +67,17 @@ export function Dashboard() {
   if (isLoading) {
     return (
       <div className="space-y-8 animate-in fade-in duration-700 pb-12">
-        {/* Header Skeleton */}
         <div className="glass rounded-2xl p-6 sm:p-8 space-y-6">
-          <div className="space-y-3">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-24" />
-          </div>
+          <Skeleton className="h-4 w-32" />
           <Skeleton className="h-10 w-full rounded-xl" />
-          <div className="flex gap-4">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-4 w-20" />
-          </div>
         </div>
-
-        {/* Content Grid Skeleton */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="glass rounded-2xl p-6 lg:col-span-2 space-y-4">
-            <Skeleton className="h-6 w-32" />
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map(i => (
-                <Skeleton key={i} className="h-12 w-full rounded-xl" />
-              ))}
-            </div>
+             {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
           </div>
           <div className="glass rounded-2xl p-6 space-y-4">
-            <Skeleton className="h-6 w-32" />
-            <div className="space-y-4">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-2 w-full rounded-full" />
-                </div>
-              ))}
-            </div>
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
           </div>
         </div>
       </div>
@@ -119,68 +86,13 @@ export function Dashboard() {
 
   if (!data || (!data.snapshot && !data.isScanning)) {
     return (
-      <div className="flex flex-col items-center justify-center h-full space-y-4">
-        <HardDrive className="w-16 h-16 text-gray-300" />
-        <h2 className="text-xl font-medium text-gray-500">No data yet</h2>
-        <button
-          onClick={startScan}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-colors font-medium text-sm"
-        >
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4 text-center">
+        <HardDrive className="w-16 h-16 text-gray-200 mb-2" />
+        <h2 className="text-xl font-bold text-gray-900">Storage Not Mapped</h2>
+        <p className="text-sm text-gray-500 max-w-xs">Run your first scan to see the breakdown of your storage.</p>
+        <button onClick={startScan} className="px-8 py-3 bg-blue-600 text-white rounded-2xl shadow-xl hover:bg-blue-700 transition-all font-bold active:scale-95">
           Start Initial Scan
         </button>
-      </div>
-    );
-  }
-
-  // If we are scanning for the first time, show a special loading view
-  if (!data.snapshot && isScanning) {
-    const elapsedSec = getElapsedSeconds();
-    const filesPerSec = Math.round(filesScanned / (elapsedSec || 1));
-
-    return (
-      <div className="flex flex-col items-center justify-center h-full space-y-8 max-w-2xl mx-auto text-center">
-        <div className="relative">
-          <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full animate-pulse" />
-          <RefreshCw className="w-16 h-16 text-blue-500 animate-spin relative" />
-        </div>
-
-        <div className="space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Mapping your Storage</h2>
-          <p className="text-muted-foreground text-lg">
-            This is a deep scan. Sit back while we index your files.
-          </p>
-        </div>
-
-        <div className="w-full space-y-4">
-          <div className="flex justify-between text-sm font-medium tabular-nums">
-            <div className="flex space-x-2">
-              <span className="text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
-                {filesScanned.toLocaleString()} files
-              </span>
-              <span className="text-blue-500 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
-                {formatBytes(bytesScanned)} scanned
-              </span>
-            </div>
-            <span className="text-muted-foreground bg-white/5 px-3 py-1 rounded-full border border-white/10">
-              {filesPerSec.toLocaleString()} files/sec
-            </span>
-          </div>
-
-          <div className="w-full bg-black/5 dark:bg-white/5 rounded-full h-3 overflow-hidden border border-white/5 shadow-inner">
-            <div className="h-full bg-blue-500 animate-[shimmer_2s_infinite] w-full bg-gradient-to-r from-blue-500 via-blue-400 to-blue-500 bg-[length:200%_100%]" />
-          </div>
-
-          <div className="glass p-4 rounded-xl border border-white/5 text-left overflow-hidden">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-bold opacity-50">Currently indexing:</div>
-            <div className="font-mono text-xs text-blue-400/80 truncate dir-rtl" dir="rtl">
-              {livePath || 'Waiting for path...'}
-            </div>
-          </div>
-        </div>
-
-        <p className="text-xs text-muted-foreground italic">
-          Tip: Large media libraries can take 5-15 minutes on the first run.
-        </p>
       </div>
     );
   }
@@ -188,9 +100,9 @@ export function Dashboard() {
   const currentFolder = data.folders.find(f => f.path === currentPath) || { sizeBytes: data.snapshot.totalSizeBytes };
 
   // Detect an "empty scan" — scan ran but found nothing (permission issue, wrong mount, etc.)
-  const isEmptyScan = data.snapshot && data.snapshot.totalSizeBytes === 0 && data.folders.length === 0;
+  const isEmptyScan = data.snapshot && data.snapshot.totalFiles === 0 && !isScanning;
 
-  if (isEmptyScan && !isScanning) {
+  if (isEmptyScan) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8 max-w-lg mx-auto text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="relative">
@@ -205,32 +117,25 @@ export function Dashboard() {
         <div className="space-y-3">
           <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Scan found 0 files</h2>
           <p className="text-gray-500 leading-relaxed">
-            The scan completed, but BirdView couldn't read any files. This is usually a <span className="font-semibold text-gray-700">permissions issue</span> — the scanner doesn't have access to the mounted directory.
+            The scan completed, but BirdView couldn't read any files. This is almost certainly a <span className="font-semibold text-gray-700">permissions issue</span>.
           </p>
         </div>
 
-        <div className="w-full bg-black/[0.02] border border-black/5 rounded-2xl p-5 text-left space-y-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Common Fixes</p>
-          <div className="space-y-3">
+        <div className="w-full bg-black/[0.02] border border-black/5 rounded-2xl p-6 text-left space-y-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Quick Fixes</p>
+          <div className="space-y-4">
             <div className="flex items-start space-x-3">
               <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</div>
               <div>
-                <p className="text-sm font-semibold text-gray-800">Run as root (Mac / Colima)</p>
-                <p className="text-xs text-gray-500 mt-0.5">Set <span className="font-mono bg-black/5 px-1 rounded">PUID=0</span> and <span className="font-mono bg-black/5 px-1 rounded">PGID=0</span> in your <span className="font-mono bg-black/5 px-1 rounded">docker-compose.yml</span></p>
+                <p className="text-sm font-semibold text-gray-800">Check Docker Mount</p>
+                <p className="text-xs text-gray-500 mt-1">Ensure <span className="font-mono bg-black/5 px-1 rounded">/Users</span> is correctly mapped to <span className="font-mono bg-black/5 px-1 rounded">/data</span> in your compose file.</p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
               <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</div>
               <div>
-                <p className="text-sm font-semibold text-gray-800">Check your volume mount</p>
-                <p className="text-xs text-gray-500 mt-0.5">Run <span className="font-mono bg-black/5 px-1 rounded">docker exec -it birdview ls /data</span> to confirm the folder is accessible</p>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3">
-              <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</div>
-              <div>
-                <p className="text-sm font-semibold text-gray-800">Unraid: match the correct PUID/PGID</p>
-                <p className="text-xs text-gray-500 mt-0.5">Use the UID of your media user — typically <span className="font-mono bg-black/5 px-1 rounded">99</span> / <span className="font-mono bg-black/5 px-1 rounded">100</span> on Unraid</p>
+                <p className="text-sm font-semibold text-gray-800">Use Root Mode (macOS)</p>
+                <p className="text-xs text-gray-500 mt-1">Set <span className="font-mono bg-black/5 px-1 rounded">PUID=0</span> and <span className="font-mono bg-black/5 px-1 rounded">PGID=0</span> to bypass local permission blocks.</p>
               </div>
             </div>
           </div>
@@ -239,206 +144,147 @@ export function Dashboard() {
         <button
           onClick={startScan}
           disabled={isScanning}
-          className="flex items-center space-x-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+          className="flex items-center space-x-3 px-8 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
           <span>Re-run Scan</span>
         </button>
       </div>
     );
   }
-
-  return (
     <>
       <div className="relative space-y-8 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        {/* History Mode Banner */}
-        {viewSnapshotId && (
-          <div className="flex items-center justify-between bg-blue-500 text-white rounded-2xl px-6 py-4 shadow-lg shadow-blue-500/20 animate-in slide-in-from-top-4 duration-500">
-            <div className="flex items-center space-x-3">
-              <div className="p-1.5 bg-white/20 rounded-lg">
-                <RefreshCw className="w-4 h-4" />
+        {/* Banner Section */}
+        {(viewSnapshotId || data.dataPathError) && (
+          <div className="space-y-4">
+            {viewSnapshotId && (
+              <div className="flex items-center justify-between bg-blue-500 text-white rounded-2xl px-6 py-4 shadow-lg shadow-blue-500/20 animate-in slide-in-from-top-4">
+                <div className="flex items-center space-x-3">
+                  <RefreshCw className="w-4 h-4 opacity-80" />
+                  <p className="text-sm font-semibold">Viewing history from {new Date(data.snapshot.timestamp).toLocaleString()}</p>
+                </div>
+                <button onClick={() => setViewSnapshotId(null)} className="px-4 py-1.5 bg-white text-blue-600 text-xs font-bold rounded-lg hover:bg-white/90 transition-all">Exit History</button>
               </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider opacity-80">Viewing History</p>
-                <p className="text-sm font-medium">Snapshot from {data?.snapshot && new Date(data.snapshot.timestamp).toLocaleString()}</p>
+            )}
+            {data.dataPathError && (
+              <div className="bg-amber-500 text-white rounded-2xl px-6 py-4 shadow-lg shadow-amber-500/20">
+                <p className="text-sm font-bold">Path Error: {data.dataPathError}</p>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Main Header Card */}
+        <div className="glass rounded-2xl p-6 sm:p-8 space-y-8">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <Breadcrumbs path={currentPath} onPathChange={handlePathChange} />
+              <h2 className="text-3xl font-bold tracking-tight text-gray-900 truncate max-w-md">{currentPath.split('/').pop() || 'Root'}</h2>
+              <p className="text-sm text-gray-400 font-medium">{formatBytes(currentFolder.sizeBytes)} used</p>
             </div>
-            <button 
-              onClick={() => setViewSnapshotId(null)}
-              className="px-4 py-2 bg-white text-blue-600 text-xs font-bold rounded-xl hover:bg-white/90 transition-all active:scale-95"
-            >
-              Back to Latest
+            <button onClick={startScan} disabled={isStarting || isScanning} className={`p-3 rounded-2xl border transition-all ${isScanning ? 'bg-blue-50 border-blue-100' : 'bg-white border-gray-200 hover:bg-gray-50 active:scale-95 shadow-sm'}`}>
+              <RefreshCw className={`w-5 h-5 ${isScanning ? 'animate-spin text-blue-500' : 'text-gray-400'}`} />
             </button>
           </div>
-        )}
 
-        {/* Data path error banner */}
-        {data.dataPathError && (
-          <div className="flex items-start space-x-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm">
-            <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
-            <div className="min-w-0">
-              <p className="font-semibold text-amber-800">Data path error</p>
-              <p className="text-amber-700 mt-0.5 font-mono text-xs break-all">{data.dataPathError}</p>
+          {isScanning && (
+            <div className="flex items-center justify-between text-xs text-blue-500 bg-blue-50/70 border border-blue-100 rounded-2xl px-5 py-3">
+              <div className="flex items-center space-x-3 min-w-0">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span className="font-mono truncate opacity-70" dir="rtl">{livePath || 'Waiting...'}</span>
+              </div>
+              <div className="font-bold tabular-nums ml-4">{formatBytes(bytesScanned)}</div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="glass rounded-2xl p-6 sm:p-8 space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Breadcrumbs path={currentPath} onPathChange={handlePathChange} />
-              <h2 className="text-2xl font-semibold tracking-tight text-gray-900">
-                {currentPath.split('/').pop() || 'Root'}
-              </h2>
-              <p className="text-sm text-gray-400">
-                {formatBytes(currentFolder.sizeBytes)} used
-              </p>
+          <StorageBar folders={data.folders} totalSize={data.snapshot.totalSizeBytes} currentPath={currentPath} onPathChange={handlePathChange} />
+        </div>
+
+        {/* Unified Explorer Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Sidebar: Categories & Analytics */}
+          <div className="lg:col-span-4 space-y-8 lg:sticky lg:top-24">
+            <div className="glass rounded-2xl p-6">
+              <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center">
+                <PieChartIcon className="w-3 h-3 mr-2" />
+                Breakdown
+              </h3>
+              <FileCategories categories={data.categories} totalSize={data.snapshot.totalSizeBytes} selectedCategory={selectedCategory} onCategorySelect={setSelectedCategory} />
             </div>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={startScan}
-                disabled={isStarting || isScanning}
-                className={`p-2.5 rounded-xl transition-all border ${(isStarting || isScanning)
-                  ? 'opacity-50 cursor-not-allowed bg-gray-100 border-gray-200'
-                  : 'hover:bg-gray-100 bg-white border-gray-200 shadow-sm active:scale-95'
-                  }`}
-              >
-                <RefreshCw className={`w-4 h-4 ${(isStarting || isScanning) ? 'animate-spin text-blue-600' : 'text-gray-500'}`} />
-              </button>
+
+            <div className="glass rounded-2xl p-6">
+              <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center">
+                <LayoutGrid className="w-3 h-3 mr-2" />
+                History
+              </h3>
+              <div className="h-[200px] -mx-2">
+                <FolderHistoryChart path={currentPath} onSnapshotSelect={handleSnapshotSelect} />
+              </div>
             </div>
           </div>
 
-          {/* Slim Live Scan Strip */}
-          {isScanning && (() => {
-            const elapsedSec = getElapsedSeconds();
-            const fPerSec = Math.round(filesScanned / (elapsedSec || 1));
-            return (
-              <div className="flex items-center justify-between text-xs text-blue-500 bg-blue-50/70 border border-blue-100 rounded-xl px-4 py-2.5">
-                <div className="flex items-center space-x-2 min-w-0">
-                  <RefreshCw className="w-3 h-3 animate-spin flex-shrink-0" />
-                  <span className="font-mono truncate text-blue-400/80" dir="rtl">{livePath || '…'}</span>
-                </div>
-                <div className="flex items-center space-x-3 ml-4 flex-shrink-0 font-medium tabular-nums">
-                  <span>{filesScanned.toLocaleString()} files</span>
-                  <span className="text-blue-300">·</span>
-                  <span>{formatBytes(bytesScanned)}</span>
-                  <span className="text-blue-300">·</span>
-                  <span className="text-blue-400">{fPerSec.toLocaleString()}/s</span>
+          {/* Right Main: Subfolders & Top Files */}
+          <div className="lg:col-span-8 space-y-8">
+            <div className="glass rounded-2xl p-1 overflow-hidden">
+              <div className="flex items-center px-6 py-4 border-b border-black/5 bg-black/[0.01]">
+                <HardDrive className="w-4 h-4 mr-2.5 text-gray-400" />
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">Subfolders</h3>
+              </div>
+              <div className="max-h-[380px] overflow-y-auto custom-scrollbar px-6 py-4 bg-white/40">
+                <div key={currentPath} className={navDirection === 'forward' ? 'animate-slide-right' : 'animate-slide-left'}>
+                  <SubfolderList folders={data.folders} currentPath={currentPath} onPathChange={handlePathChange} />
                 </div>
               </div>
-            );
-          })()}
-
-          <StorageBar
-            folders={data.folders}
-            totalSize={data.snapshot.totalSizeBytes}
-            currentPath={currentPath}
-            onPathChange={handlePathChange}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="glass rounded-2xl p-6 lg:col-span-2">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center">
-              <HardDrive className="w-3.5 h-3.5 mr-2" />
-              Subfolders
-              <span className="ml-2 text-gray-300 normal-case font-normal tracking-normal">— click to drill down</span>
-            </h3>
-            <div
-              key={currentPath}
-              className={navDirection === 'forward' ? 'animate-slide-right' : 'animate-slide-left'}
-            >
-              <SubfolderList folders={data.folders} currentPath={currentPath} onPathChange={handlePathChange} />
             </div>
-          </div>
 
-          <div className="glass rounded-2xl p-6">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center">
-              <PieChartIcon className="w-3.5 h-3.5 mr-2" />
-              File Types
-            </h3>
-            <FileCategories
-              categories={data.categories}
-              totalSize={data.snapshot.totalSizeBytes}
-              selectedCategory={selectedCategory}
-              onCategorySelect={setSelectedCategory}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="glass rounded-2xl p-6">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-5 flex items-center">
-              <RefreshCw className="w-3.5 h-3.5 mr-2" />
-              {selectedCategory ? `Top ${selectedCategory} Files` : 'Global Top 10 Largest Files'}
-            </h3>
-            <TopFilesList
-              files={data.topFiles}
-              selectedCategory={selectedCategory}
-            />
-          </div>
-
-          <div className="glass rounded-2xl p-6">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4 flex items-center">
-              <HardDrive className="w-3.5 h-3.5 mr-2" />
-              Folder Analytics
-            </h3>
-            <div className="mb-6">
-              <FolderHistoryChart path={currentPath} onSnapshotSelect={handleSnapshotSelect} />
+            <div className="glass rounded-2xl p-6 min-h-[400px]">
+               <div className="flex items-center justify-between mb-8 px-2">
+                  <div className="flex items-center">
+                    <div className="p-1.5 bg-gray-50 rounded-lg mr-3 border border-black/5">
+                      <List className="w-4 h-4 text-gray-500" />
+                    </div>
+                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
+                      {selectedCategory ? `${selectedCategory} Files` : 'Largest Files'}
+                    </h3>
+                  </div>
+               </div>
+               <TopFilesList files={data.topFiles} selectedCategory={selectedCategory} />
             </div>
           </div>
         </div>
 
+        {/* Scan Information Footer */}
         <div className="glass rounded-2xl p-8">
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-6 flex items-center">
-            <RefreshCw className="w-3.5 h-3.5 mr-2" />
-            Scan Information
-          </h3>
-
-          <div className="space-y-1 mt-6 border-t border-white/5 pt-6">
-            <div className="flex justify-between items-center py-2.5 border-b border-white/5">
-              <span className="text-sm text-gray-400">Next Scan</span>
-              <span className="text-sm font-medium text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20">
-                {(() => {
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 text-center sm:text-left">
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Next Scan</p>
+              <p className="text-lg font-bold text-blue-600">
+                 {(() => {
                   const diffMs = new Date(data.nextScanTime).getTime() - Date.now();
-                  if (diffMs <= 0) return 'Starting soon...';
+                  if (diffMs <= 0) return 'Scanning...';
                   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                  const diffMins = Math.floor(diffMs / (1000 * 60));
-                  
-                  if (diffDays > 0) return `in ${diffDays} day${diffDays > 1 ? 's' : ''}`;
-                  if (diffHours > 0) return `in ${diffHours} hour${diffHours > 1 ? 's' : ''}`;
-                  return `in ${diffMins} min${diffMins > 1 ? 's' : ''}`;
+                  if (diffDays > 0) return `In ${diffDays} day${diffDays > 1 ? 's' : ''}`;
+                  return 'Starting Soon';
                 })()}
-              </span>
+              </p>
             </div>
-            <div className="flex justify-between items-center py-2.5 border-b border-white/5">
-              <span className="text-sm text-gray-400">Path</span>
-              <span className="font-mono text-xs max-w-[200px] truncate text-gray-500" title={currentPath}>{currentPath}</span>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Last Index</p>
+              <p className="text-lg font-bold text-gray-900">{new Date(data.snapshot.timestamp).toLocaleDateString()}</p>
             </div>
-            <div className="flex justify-between items-center py-2.5 border-b border-white/5">
-              <span className="text-sm text-gray-400">File Count</span>
-              <span className="text-sm font-semibold text-white">{(currentFolder as any).fileCount?.toLocaleString() || data.snapshot.totalFiles.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center py-2.5 border-b border-white/5">
-              <span className="text-sm text-gray-400">Last Scan</span>
-              <span className="text-sm text-gray-400">{new Date(data.snapshot.timestamp).toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between items-center py-2.5">
-              <span className="text-sm text-gray-400">Scan Duration</span>
-              <span className="text-sm text-gray-400">{data.snapshot.durationMs} ms</span>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Files</p>
+              <p className="text-lg font-bold text-gray-900">{data.snapshot.totalFiles.toLocaleString()}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Smart Loading Overlay - MOVED TO SIBLING POSITION */}
+      {/* Smart Loading Overlay */}
       <div className={`fixed inset-0 z-[100] flex items-center justify-center bg-white/60 backdrop-blur-md transition-all duration-300 pointer-events-none opacity-0 ${isPending ? 'opacity-100 pointer-events-auto delay-300' : 'delay-0'}`}>
-        <div className="bg-white p-5 rounded-2xl shadow-xl border border-black/5 flex items-center space-x-3">
-          <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
-          <span className="text-sm font-medium text-gray-600">Loading...</span>
+        <div className="bg-white p-6 rounded-3xl shadow-2xl border border-black/5 flex items-center space-x-4">
+          <RefreshCw className="w-7 h-7 text-blue-500 animate-spin" />
+          <span className="text-lg font-bold text-gray-700">Mapping Storage...</span>
         </div>
       </div>
     </>

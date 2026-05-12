@@ -26,11 +26,12 @@ export function FolderHistoryChart({ path, onSnapshotSelect }: FolderHistoryChar
   }
 
   const option = {
-    grid: { left: 0, right: 0, top: 10, bottom: 0 },
+    grid: { left: 0, right: 0, top: 0, bottom: 0 },
     xAxis: {
       type: 'category',
       data: history.map(h => h.timestamp),
-      show: false
+      show: false,
+      boundaryGap: false
     },
     yAxis: {
       type: 'value',
@@ -74,10 +75,12 @@ export function FolderHistoryChart({ path, onSnapshotSelect }: FolderHistoryChar
   };
 
   return (
-    <ReactECharts 
-      option={option} 
-      style={{ height: '80px', width: '100%' }} 
-      onEvents={{ 'click': onChartClick }}
-    />
+    <div className="w-full h-full">
+      <ReactECharts 
+        option={option} 
+        style={{ height: '100%', width: '100%' }} 
+        onEvents={{ 'click': onChartClick }}
+      />
+    </div>
   );
 }
