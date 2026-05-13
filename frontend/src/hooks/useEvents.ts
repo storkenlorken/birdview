@@ -12,8 +12,15 @@ export function useEvents() {
   const [lastUpdate, setLastUpdate] = useState<ProgressUpdate | null>(null);
 
   useEffect(() => {
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    let eventSource: EventSource | null = null;
+
     const connect = () => {
-      const eventSource = new EventSource('/api/events');
+      // Clear any existing connection/timeout before starting a new one
+      if (eventSource) eventSource.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+
+      eventSource = new EventSource('/api/events');
 
       eventSource.onmessage = (event) => {
         try {
@@ -26,17 +33,19 @@ export function useEvents() {
 
       eventSource.onerror = (err) => {
         console.error('SSE Error, reconnecting in 3s...', err);
-        eventSource.close();
-        setTimeout(connect, 3000);
+        if (eventSource) eventSource.close();
+        
+        // Schedule reconnect only if we aren't unmounted
+        reconnectTimeout = setTimeout(connect, 3000);
       };
-
-      return eventSource;
     };
 
-    const es = connect();
+    connect();
 
+    // Cleanup: Perfectly kill both the connection and the timer
     return () => {
-      es.close();
+      if (eventSource) eventSource.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, []);
 

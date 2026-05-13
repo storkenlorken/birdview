@@ -169,8 +169,8 @@ func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
 		"bytesScanned":  a.scanner.BytesScanned,
 		"currentPath":   a.scanner.CurrentPath,
 		"startTime":     a.scanner.StartTime,
-		"nextScanTime":  a.scheduler.NextScanTime,
-		"dataPathError": a.scheduler.DataPathError,
+		"nextScanTime":  a.scheduler.GetNextScanTime(),
+		"dataPathError": a.scheduler.GetDataPathError(),
 	}
 	if hasSnapshot {
 		response["snapshot"] = snapshot

@@ -95,7 +95,7 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 	// Work management
 	work := make(chan string, 100000)
 	pending := sync.WaitGroup{}
-	numWorkers := 8
+	numWorkers := 16 // Increased workers for modern systems
 	
 	// Stats tracking
 	var statsMu sync.Mutex
@@ -103,12 +103,33 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 	topFiles := make(map[string][]models.TopFileResult)
 	categories := make(map[string]*models.CategoryResult)
 	
+	// Symlink Loop Protection: Track visited Inodes
+	visitedInodes := sync.Map{}
+	
 	lastReport := time.Now()
 
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for path := range work {
-				// Open directory
+				// 1. Symlink & Loop Protection
+				info, err := os.Lstat(path)
+				if err != nil {
+					log.Printf("Error stating %s: %v", path, err)
+					pending.Done()
+					continue
+				}
+
+				// Check for circular references
+				if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+					inode := stat.Ino
+					if _, seen := visitedInodes.LoadOrStore(inode, true); seen {
+						// Already visited this physical folder via another path
+						pending.Done()
+						continue
+					}
+				}
+
+				// 2. Open directory
 				f, err := os.Open(path)
 				if err != nil {
 					log.Printf("Error opening %s: %v", path, err)
@@ -146,17 +167,16 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 						select {
 						case work <- fullPath:
 						default:
-							// Buffer overflow safety
 							go func(p string) { work <- p }(fullPath)
 						}
 					} else {
-						info, err := d.Info()
+						finfo, err := d.Info()
 						if err != nil { continue }
 						var size int64
-						if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+						if stat, ok := finfo.Sys().(*syscall.Stat_t); ok {
 							size = stat.Blocks * 512
 						} else {
-							size = info.Size()
+							size = finfo.Size()
 						}
 						
 						atomic.AddInt64(&totalSize, size)
@@ -180,7 +200,6 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 					FileCount: dirFiles,
 				}
 				
-				// Report progress every 500ms
 				if time.Since(lastReport) > 500*time.Millisecond && s.OnProgress != nil {
 					s.CurrentPath = path
 					s.OnProgress(ProgressUpdate{
@@ -208,18 +227,16 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 	s.propagateSizes(folderStats)
 
 	durationMs := time.Since(startTime).Milliseconds()
-	log.Printf("Optimized scan completed in %d ms. Found %d files.", durationMs, totalFiles)
+	log.Printf("Scan completed in %d ms. Found %d files.", durationMs, totalFiles)
 
 	return s.saveSnapshot(totalSize, int(totalFiles), durationMs, folderStats, topFiles, categories)
 }
 
 func (s *Scanner) updateFileStats(path string, size int64, topFiles map[string][]models.TopFileResult, categories map[string]*models.CategoryResult) {
-	// 1. Determine Category
 	lowerPath := strings.ToLower(path)
 	ext := strings.ToLower(filepath.Ext(path))
 	cat := ""
 
-	// Priority Heuristics (Path-based "Purpose")
 	if strings.Contains(lowerPath, "/timemachine/") || strings.Contains(lowerPath, "/backups/") || 
 	   strings.Contains(lowerPath, ".sparsebundle/") || strings.Contains(lowerPath, ".backupbundle/") {
 		cat = "Backups"
@@ -227,7 +244,6 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles map[string][
 		cat = "System"
 	}
 
-	// Extension-based ("Format") if no priority match
 	if cat == "" {
 		switch ext {
 		case ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".m2ts": cat = "Video"
@@ -241,7 +257,6 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles map[string][
 		}
 	}
 
-	// 2. Per-Category Top Files (Keep top 50 per category)
 	catTop := topFiles[cat]
 	if len(catTop) < 50 || size > catTop[len(catTop)-1].SizeBytes {
 		catTop = append(catTop, models.TopFileResult{Path: path, SizeBytes: size, Category: cat})
@@ -254,7 +269,6 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles map[string][
 		topFiles[cat] = catTop
 	}
 
-	// 3. Update Category Stats
 	if _, exists := categories[cat]; !exists {
 		categories[cat] = &models.CategoryResult{Category: cat}
 	}
@@ -263,21 +277,17 @@ func (s *Scanner) updateFileStats(path string, size int64, topFiles map[string][
 }
 
 func (s *Scanner) propagateSizes(folderStats map[string]*models.FolderResult) {
-	// Get all paths and sort by depth (longest first)
 	paths := make([]string, 0, len(folderStats))
 	for p := range folderStats {
 		paths = append(paths, p)
 	}
 	
-	// Sort by number of slashes descending (deepest first)
 	sort.Slice(paths, func(i, j int) bool {
 		return strings.Count(paths[i], "/") > strings.Count(paths[j], "/")
 	})
 
 	for _, path := range paths {
-		if path == "/" || path == "." {
-			continue
-		}
+		if path == "/" || path == "." { continue }
 		
 		parent := filepath.Dir(path)
 		if parentStat, exists := folderStats[parent]; exists {
@@ -294,56 +304,77 @@ func (s *Scanner) saveSnapshot(totalSize int64, totalFiles int, durationMs int64
 	}
 	defer tx.Rollback()
 
-	// Insert snapshot
 	res, err := tx.Exec("INSERT INTO snapshots (total_size_bytes, total_files, duration_ms) VALUES (?, ?, ?)", totalSize, totalFiles, durationMs)
 	if err != nil {
 		return fmt.Errorf("failed to insert snapshot: %w", err)
 	}
 	snapshotID, _ := res.LastInsertId()
 
-	// Batch insert folders
-	stmt, err := tx.Preparex("INSERT INTO folder_snapshots (snapshot_id, path, size_bytes, file_count) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		return fmt.Errorf("failed to prepare folder statement: %w", err)
+	// Optimized Batch Insert for Folders
+	folderQuery := "INSERT INTO folder_snapshots (snapshot_id, path, size_bytes, file_count) VALUES "
+	values := []interface{}{}
+	count := 0
+	
+	// Convert map to slice for stable iteration
+	statsList := make([]*models.FolderResult, 0, len(folderStats))
+	for _, s := range folderStats {
+		statsList = append(statsList, s)
 	}
-	for _, stat := range folderStats {
-		_, err = stmt.Exec(snapshotID, stat.Path, stat.SizeBytes, stat.FileCount)
-		if err != nil {
-			stmt.Close()
-			return fmt.Errorf("failed to execute folder insert: %w", err)
-		}
-	}
-	stmt.Close()
 
-	// Batch insert top files (all categories)
-	stmt, err = tx.Preparex("INSERT INTO top_files (snapshot_id, path, size_bytes, category) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		return fmt.Errorf("failed to prepare top files statement: %w", err)
-	}
-	for _, catList := range topFiles {
-		for _, f := range catList {
-			_, err = stmt.Exec(snapshotID, f.Path, f.SizeBytes, f.Category)
+	for i, stat := range statsList {
+		folderQuery += "(?, ?, ?, ?)"
+		values = append(values, snapshotID, stat.Path, stat.SizeBytes, stat.FileCount)
+		count++
+
+		// SQLite batch limit is usually 999 parameters, we'll use 200 rows per batch (800 params)
+		if count >= 200 || i == len(statsList)-1 {
+			_, err = tx.Exec(folderQuery, values...)
 			if err != nil {
-				stmt.Close()
-				return fmt.Errorf("failed to execute top file insert: %w", err)
+				return fmt.Errorf("failed to batch insert folders: %w", err)
 			}
+			folderQuery = "INSERT INTO folder_snapshots (snapshot_id, path, size_bytes, file_count) VALUES "
+			values = []interface{}{}
+			count = 0
+		} else {
+			folderQuery += ", "
 		}
 	}
-	stmt.Close()
 
-	// Batch insert categories
-	stmt, err = tx.Preparex("INSERT INTO category_snapshots (snapshot_id, category, size_bytes, file_count) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		return fmt.Errorf("failed to prepare categories statement: %w", err)
+	// Batch insert top files
+	topQuery := "INSERT INTO top_files (snapshot_id, path, size_bytes, category) VALUES "
+	topValues := []interface{}{}
+	count = 0
+	
+	allTopFiles := []models.TopFileResult{}
+	for _, list := range topFiles {
+		allTopFiles = append(allTopFiles, list...)
 	}
-	for _, c := range categories {
-		_, err = stmt.Exec(snapshotID, c.Category, c.SizeBytes, c.FileCount)
-		if err != nil {
-			stmt.Close()
-			return fmt.Errorf("failed to execute category insert: %w", err)
+
+	for i, f := range allTopFiles {
+		topQuery += "(?, ?, ?, ?)"
+		topValues = append(topValues, snapshotID, f.Path, f.SizeBytes, f.Category)
+		count++
+
+		if count >= 200 || i == len(allTopFiles)-1 {
+			_, err = tx.Exec(topQuery, topValues...)
+			if err != nil {
+				return fmt.Errorf("failed to batch insert top files: %w", err)
+			}
+			topQuery = "INSERT INTO top_files (snapshot_id, path, size_bytes, category) VALUES "
+			topValues = []interface{}{}
+			count = 0
+		} else {
+			topQuery += ", "
 		}
 	}
-	stmt.Close()
+
+	// Batch insert categories (small enough for single insert)
+	for _, c := range categories {
+		_, err = tx.Exec("INSERT INTO category_snapshots (snapshot_id, category, size_bytes, file_count) VALUES (?, ?, ?, ?)", snapshotID, c.Category, c.SizeBytes, c.FileCount)
+		if err != nil {
+			return fmt.Errorf("failed to insert category: %w", err)
+		}
+	}
 
 	return tx.Commit()
 }
