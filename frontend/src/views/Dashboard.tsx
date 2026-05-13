@@ -25,6 +25,7 @@ export function Dashboard() {
   // Determine if we should show live progress
   const isScanning = liveUpdate?.isRunning ?? data?.isScanning;
   const bytesScanned = liveUpdate?.isRunning ? liveUpdate.bytesScanned : (data?.bytesScanned ?? 0);
+  const filesScanned = liveUpdate?.isRunning ? liveUpdate.filesScanned : (data?.filesScanned ?? 0);
   const livePath = liveUpdate?.isRunning ? liveUpdate.currentPath : data?.currentPath;
 
   const handlePathChange = (newPath: string) => {
@@ -45,7 +46,7 @@ export function Dashboard() {
     const handleJump = (e: any) => {
       const path = e.detail.path;
       const targetPath = path.includes('.') && !path.endsWith('/') ? path.substring(0, path.lastIndexOf('/')) : path;
-      
+
       startTransition(() => {
         setViewSnapshotId(null);
         setCurrentPath(targetPath || '/data');
@@ -73,7 +74,7 @@ export function Dashboard() {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="glass rounded-2xl p-6 lg:col-span-2 space-y-4">
-             {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
           </div>
           <div className="glass rounded-2xl p-6 space-y-4">
             <Skeleton className="h-10 w-full" />
@@ -190,11 +191,25 @@ export function Dashboard() {
 
           {isScanning && (
             <div className="flex items-center justify-between text-xs text-blue-500 bg-blue-50/70 border border-blue-100 rounded-2xl px-5 py-3">
-              <div className="flex items-center space-x-3 min-w-0">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 <span className="font-mono truncate opacity-70" dir="rtl">{livePath || 'Waiting...'}</span>
               </div>
-              <div className="font-bold tabular-nums ml-4">{formatBytes(bytesScanned)}</div>
+              <div className="flex items-center space-x-6 ml-4">
+                {(() => {
+                  const start = new Date(data.startTime).getTime();
+                  const now = Date.now();
+                  const elapsed = (now - start) / 1000;
+                  const fps = elapsed > 1 ? Math.round(filesScanned / elapsed) : 0;
+                  return fps > 0 ? (
+                    <div className="flex items-center font-bold tabular-nums">
+                      <span className="opacity-50 mr-1.5 font-medium uppercase tracking-tighter text-[9px]">Speed</span>
+                      {fps.toLocaleString()} <span className="ml-1 opacity-50 font-medium">files/s</span>
+                    </div>
+                  ) : null;
+                })()}
+                <div className="font-bold tabular-nums whitespace-nowrap flex-shrink-0">{formatBytes(bytesScanned)}</div>
+              </div>
             </div>
           )}
 
@@ -218,17 +233,17 @@ export function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Main Content: Top Files (Left, Spans 8) */}
           <div className="lg:col-span-8 glass rounded-2xl p-6 min-h-[500px]">
-             <div className="flex items-center justify-between mb-8 px-2">
-                <div className="flex items-center">
-                  <div className="p-1.5 bg-gray-50 rounded-lg mr-3 border border-black/5">
-                    <List className="w-4 h-4 text-gray-500" />
-                  </div>
-                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
-                    {selectedCategory ? `${selectedCategory} Files` : 'Largest Files'}
-                  </h3>
+            <div className="flex items-center justify-between mb-8 px-2">
+              <div className="flex items-center">
+                <div className="p-1.5 bg-gray-50 rounded-lg mr-3 border border-black/5">
+                  <List className="w-4 h-4 text-gray-500" />
                 </div>
-             </div>
-             <TopFilesList files={data.topFiles} selectedCategory={selectedCategory} />
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
+                  {selectedCategory ? `${selectedCategory} Files` : 'Largest Files'}
+                </h3>
+              </div>
+            </div>
+            <TopFilesList files={data.topFiles} selectedCategory={selectedCategory} />
           </div>
 
           {/* Right Sidebar: Utility Stack (Spans 4) */}
