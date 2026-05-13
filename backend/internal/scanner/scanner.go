@@ -187,7 +187,12 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 					// If it's a directory OR a symlink (which might point to a directory)
 					if d.IsDir() || (d.Type()&os.ModeSymlink != 0) {
 						pending.Add(1)
-						work <- fullPath
+						select {
+						case work <- fullPath:
+						default:
+							// If channel is full, spawn a goroutine to wait so we don't deadlock
+							go func(p string) { work <- p }(fullPath)
+						}
 					} else {
 						finfo, err := d.Info()
 						if err != nil { continue }
