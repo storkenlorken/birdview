@@ -55,9 +55,22 @@ export function FolderHistoryChart({ path, onSnapshotSelect }: FolderHistoryChar
       type: 'line',
       smooth: true,
       symbol: 'circle',
-      symbolSize: 4,
-      itemStyle: { color: '#3b82f6' },
-      lineStyle: { width: 2, color: '#3b82f6' },
+      symbolSize: 8,
+      itemStyle: { 
+        color: '#3b82f6',
+        borderColor: '#fff',
+        borderWidth: 2,
+        shadowColor: 'rgba(0,0,0,0.2)',
+        shadowBlur: 5
+      },
+      emphasis: {
+        scale: true,
+        itemStyle: {
+          symbolSize: 12,
+          borderWidth: 3
+        }
+      },
+      lineStyle: { width: 3, color: '#3b82f6' },
       areaStyle: {
         color: {
           type: 'linear', x: 0, y: 0, x2: 0, y2: 1,

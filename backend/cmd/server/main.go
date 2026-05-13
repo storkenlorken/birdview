@@ -21,6 +21,8 @@ import (
 	"github.com/storkenlorken/birdview/internal/scheduler"
 )
 
+var version = "0.0.0" // This can be set via -ldflags during build
+
 func main() {
 	// Initialize Database
 	dbPath := os.Getenv("BIRDVIEW_DB_PATH")
@@ -73,7 +75,7 @@ func main() {
 	defer sched.Stop()
 
 	// Initialize API
-	apiService := api.NewAPI(database, scanService, sched)
+	apiService := api.NewAPI(database, scanService, sched, version)
 
 	// Initialize Router
 	r := chi.NewRouter()

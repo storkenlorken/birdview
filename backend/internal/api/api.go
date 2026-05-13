@@ -23,13 +23,15 @@ type API struct {
 	clients   map[chan scanner.ProgressUpdate]bool
 	message   chan scanner.ProgressUpdate
 	clientsMu sync.RWMutex
+	version   string
 }
 
-func NewAPI(db *sqlx.DB, s *scanner.Scanner, sched *scheduler.Scheduler) *API {
+func NewAPI(db *sqlx.DB, s *scanner.Scanner, sched *scheduler.Scheduler, version string) *API {
 	api := &API{
 		db:        db,
 		scanner:   s,
 		scheduler: sched,
+		version:   version,
 		clients:   make(map[chan scanner.ProgressUpdate]bool),
 		message:   make(chan scanner.ProgressUpdate, 100),
 	}
@@ -171,6 +173,7 @@ func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
 		"startTime":     a.scanner.StartTime,
 		"nextScanTime":  a.scheduler.GetNextScanTime(),
 		"dataPathError": a.scheduler.GetDataPathError(),
+		"version":       a.version,
 	}
 	if hasSnapshot {
 		response["snapshot"] = snapshot

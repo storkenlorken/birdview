@@ -8,12 +8,12 @@ RUN npm run build
 
 # Stage 2: Build Backend
 FROM golang:alpine AS backend-builder
+RUN apk add --no-cache git
 WORKDIR /app
-COPY backend/go.mod backend/go.sum ./
+COPY . .
+WORKDIR /app/backend
 RUN go mod download
-COPY backend/ ./
-RUN go mod tidy
-RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-X main.version=0.1.$(git -C /app rev-list --count HEAD || echo 0)" -o /app/server ./cmd/server/main.go
 
 # Stage 3: Final Image
 FROM alpine:latest

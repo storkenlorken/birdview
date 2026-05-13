@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Activity, Shield, Info, Plus, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
+import { useStats } from '../hooks/useStats';
 import { Skeleton } from '../components/ui/Skeleton';
 
 export function SettingsView() {
   const [activeSection, setActiveSection] = useState<'general' | 'exclusions' | 'about'>('general');
   const { settings, isLoading, updateSettings } = useSettings();
+  const { data: stats } = useStats();
 
   if (isLoading || !settings) {
     return (
@@ -171,7 +173,7 @@ export function SettingsView() {
             </div>
             <div className="space-y-1">
               <h2 className="text-2xl font-bold text-gray-900">BirdView</h2>
-              <p className="text-sm text-gray-500 font-medium tracking-tight">Version 1.0.0 (Internal Build)</p>
+              <p className="text-sm text-gray-500 font-medium tracking-tight">Version {stats?.version || '0.0.0'}</p>
             </div>
             <p className="max-w-xs text-sm text-gray-500 leading-relaxed">
               BirdView is a storage analysis tool built for the modern home server. 

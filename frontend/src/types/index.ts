@@ -38,4 +38,5 @@ export interface StatsResponse {
   startTime: string;
   nextScanTime: string;
   dataPathError: string;
+  version: string;
 }
