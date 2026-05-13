@@ -137,7 +137,13 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 					continue
 				}
 
-				// Check for circular references
+				if info.Mode()&os.ModeSymlink != 0 {
+					// Skip symlinks to avoid circular loops and 'no such file' errors on broken Unraid links
+					pending.Done()
+					continue
+				}
+
+				// Check for circular references (via hard links or bind mounts)
 				if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 					inode := stat.Ino
 					if _, seen := visitedInodes.LoadOrStore(inode, true); seen {
