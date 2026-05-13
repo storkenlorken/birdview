@@ -92,15 +92,56 @@ export function Dashboard() {
     );
   }
 
-  if (!data || (!data.snapshot && !data.isScanning)) {
+  if (!data || !data.snapshot) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4 text-center">
-        <HardDrive className="w-16 h-16 text-gray-200 mb-2" />
-        <h2 className="text-xl font-bold text-gray-900">Storage Not Mapped</h2>
-        <p className="text-sm text-gray-500 max-w-xs">Run your first scan to see the breakdown of your storage.</p>
-        <button onClick={startScan} className="px-8 py-3 bg-blue-600 text-white rounded-2xl shadow-xl hover:bg-blue-700 transition-all font-bold active:scale-95">
-          Start Initial Scan
-        </button>
+      <div className="flex flex-col items-center justify-center h-[70vh] space-y-6 text-center animate-in fade-in duration-700">
+        {isScanning ? (
+           <>
+            <div className="relative mb-4">
+              <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full animate-pulse" />
+              <div className="relative w-24 h-24 rounded-[2rem] bg-gradient-to-tr from-blue-50 to-indigo-50 border border-blue-100/50 flex items-center justify-center shadow-2xl">
+                <RefreshCw className="w-10 h-10 text-blue-500 animate-spin" />
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900">Initial Scan in Progress</h2>
+            <p className="text-gray-500 max-w-sm leading-relaxed text-sm">
+              BirdView is securely mapping your storage array. This process can take several minutes depending on the size of your drives.
+            </p>
+            
+            <div className="mt-8 bg-white/50 backdrop-blur-xl border border-black/5 shadow-xl shadow-black/5 rounded-3xl p-6 w-full max-w-md text-left space-y-5 animate-in slide-in-from-bottom-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3 text-sm font-medium">
+                  <Files className="w-4 h-4 text-blue-500" />
+                  <span className="text-gray-500">Files Discovered</span>
+                </div>
+                <span className="text-gray-900 font-bold tabular-nums text-lg">{filesScanned.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3 text-sm font-medium">
+                  <HardDrive className="w-4 h-4 text-indigo-500" />
+                  <span className="text-gray-500">Data Processed</span>
+                </div>
+                <span className="text-gray-900 font-bold tabular-nums text-lg">{formatBytes(bytesScanned)}</span>
+              </div>
+              <div className="pt-5 mt-2 border-t border-black/5">
+                 <p className="text-xs text-gray-400 font-mono truncate" dir="rtl">{livePath || 'Waiting for path...'}</p>
+              </div>
+            </div>
+           </>
+        ) : (
+           <>
+            <div className="w-24 h-24 rounded-[2rem] bg-gray-50 border border-gray-100 flex items-center justify-center shadow-inner mb-2">
+              <HardDrive className="w-10 h-10 text-gray-300" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight text-gray-900">Storage Not Mapped</h2>
+              <p className="text-sm text-gray-500 max-w-xs mx-auto">Run your first scan to see the breakdown of your storage.</p>
+            </div>
+            <button onClick={startScan} disabled={isStarting} className="mt-4 px-8 py-3.5 bg-gray-900 text-white rounded-2xl shadow-xl hover:bg-black hover:shadow-2xl hover:-translate-y-0.5 transition-all font-bold active:scale-95 disabled:opacity-50">
+              {isStarting ? 'Starting...' : 'Start Initial Scan'}
+            </button>
+           </>
+        )}
       </div>
     );
   }
