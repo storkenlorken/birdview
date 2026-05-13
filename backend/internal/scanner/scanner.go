@@ -129,21 +129,21 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for path := range work {
-				// 1. Symlink & Loop Protection
-				info, err := os.Lstat(path)
+				// 1. Resolve path (following symlinks)
+				info, err := os.Stat(path)
 				if err != nil {
-					log.Printf("Error stating %s: %v", path, err)
+					// Silent skip for broken symlinks or restricted folders
 					pending.Done()
 					continue
 				}
 
-				if info.Mode()&os.ModeSymlink != 0 {
-					// Skip symlinks to avoid circular loops and 'no such file' errors on broken Unraid links
+				// If it's not a directory, skip it (should have been handled in the parent's loop)
+				if !info.IsDir() {
 					pending.Done()
 					continue
 				}
 
-				// Check for circular references (via hard links or bind mounts)
+				// Check for circular references (via hard links, bind mounts, or symlinks)
 				if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 					inode := stat.Ino
 					if _, seen := visitedInodes.LoadOrStore(inode, true); seen {
@@ -155,7 +155,6 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 				// 2. Open directory
 				f, err := os.Open(path)
 				if err != nil {
-					log.Printf("Error opening %s: %v", path, err)
 					pending.Done()
 					continue
 				}
@@ -163,7 +162,6 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 				f.Close()
 				
 				if err != nil {
-					log.Printf("Error reading %s: %v", path, err)
 					pending.Done()
 					continue
 				}
@@ -185,9 +183,10 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 					if excluded { continue }
 
 					fullPath := filepath.Join(path, name)
-					if d.IsDir() {
+					
+					// If it's a directory OR a symlink (which might point to a directory)
+					if d.IsDir() || (d.Type()&os.ModeSymlink != 0) {
 						pending.Add(1)
-						// Standard blocking send to avoid goroutine explosion
 						work <- fullPath
 					} else {
 						finfo, err := d.Info()
