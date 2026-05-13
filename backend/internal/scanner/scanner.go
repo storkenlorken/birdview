@@ -121,14 +121,20 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 	topFiles := make(map[string][]models.TopFileResult)
 	categories := make(map[string]*models.CategoryResult)
 	
-	// Symlink Loop Protection: Track visited Inodes
-	visitedInodes := sync.Map{}
+	// Symlink Loop Protection: Track visited resolved paths
+	visitedPaths := sync.Map{}
 	
 	lastReport := time.Now()
 
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for path := range work {
+				// Hard depth limit to prevent any runaway paths
+				if strings.Count(path, "/") > 100 || strings.Count(path, string(os.PathSeparator)) > 100 {
+					pending.Done()
+					continue
+				}
+
 				// 1. Resolve path (following symlinks)
 				info, err := os.Stat(path)
 				if err != nil {
@@ -137,16 +143,22 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 					continue
 				}
 
-				// If it's not a directory, skip it (should have been handled in the parent's loop)
+				// If it's not a directory, skip it
 				if !info.IsDir() {
 					pending.Done()
 					continue
 				}
 
-				// Check for circular references (via hard links, bind mounts, or symlinks)
-				if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-					inode := stat.Ino
-					if _, seen := visitedInodes.LoadOrStore(inode, true); seen {
+				// Loop protection: Track visited resolved paths instead of Inodes
+				// Unraid's shfs (FUSE) does not guarantee unique inodes, so we use absolute paths.
+				resolvedPath, err := filepath.EvalSymlinks(path)
+				if err == nil {
+					if _, seen := visitedPaths.LoadOrStore(resolvedPath, true); seen {
+						pending.Done()
+						continue
+					}
+				} else {
+					if _, seen := visitedPaths.LoadOrStore(path, true); seen {
 						pending.Done()
 						continue
 					}
@@ -184,8 +196,15 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 
 					fullPath := filepath.Join(path, name)
 					
-					// If it's a directory OR a symlink (which might point to a directory)
-					if d.IsDir() || (d.Type()&os.ModeSymlink != 0) {
+					// Determine if it's a directory (following symlinks if necessary)
+					isDir := d.IsDir()
+					if !isDir && (d.Type()&os.ModeSymlink != 0) {
+						if stat, err := os.Stat(fullPath); err == nil && stat.IsDir() {
+							isDir = true
+						}
+					}
+					
+					if isDir {
 						pending.Add(1)
 						select {
 						case work <- fullPath:
@@ -194,8 +213,13 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 							go func(p string) { work <- p }(fullPath)
 						}
 					} else {
-						finfo, err := d.Info()
-						if err != nil { continue }
+						// It's a file, or a symlink to a file.
+						finfo, err := os.Stat(fullPath) // Follow symlink to get real file size
+						if err != nil { 
+							finfo, err = d.Info() // Fallback to link size if broken
+							if err != nil { continue }
+						}
+						
 						var size int64
 						if stat, ok := finfo.Sys().(*syscall.Stat_t); ok {
 							size = stat.Blocks * 512
