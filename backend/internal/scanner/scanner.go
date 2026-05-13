@@ -27,41 +27,59 @@ type ProgressUpdate struct {
 
 type Scanner struct {
 	db           *sqlx.DB
-	IsRunning    bool
-	FilesScanned int64
-	BytesScanned int64
-	CurrentPath  string
-	StartTime    time.Time
+	
+	// Thread-safe status
+	isRunning    atomic.Bool
+	filesScanned atomic.Int64
+	bytesScanned atomic.Int64
+	currentPath  atomic.Value // holds string
+	startTime    atomic.Value // holds time.Time
+	
 	OnProgress   func(ProgressUpdate)
 	scanMu       sync.Mutex
 }
 
 func NewScanner(db *sqlx.DB) *Scanner {
-	return &Scanner{
+	s := &Scanner{
 		db: db,
+	}
+	s.currentPath.Store("")
+	s.startTime.Store(time.Time{})
+	return s
+}
+
+func (s *Scanner) GetStatus() ProgressUpdate {
+	startTime, _ := s.startTime.Load().(time.Time)
+	currentPath, _ := s.currentPath.Load().(string)
+	
+	return ProgressUpdate{
+		FilesScanned: s.filesScanned.Load(),
+		BytesScanned: s.bytesScanned.Load(),
+		CurrentPath:  currentPath,
+		IsRunning:    s.isRunning.Load(),
+		StartTime:    startTime,
 	}
 }
 
 func (s *Scanner) RunScan(basePath string) error {
 	s.scanMu.Lock()
-	if s.IsRunning {
+	if s.isRunning.Load() {
 		s.scanMu.Unlock()
 		return fmt.Errorf("scan already in progress")
 	}
-	s.IsRunning = true
+	s.isRunning.Store(true)
 	s.scanMu.Unlock()
 
-	s.FilesScanned = 0
-	s.BytesScanned = 0
-	s.StartTime = time.Now()
+	s.filesScanned.Store(0)
+	s.bytesScanned.Store(0)
+	startTime := time.Now()
+	s.startTime.Store(startTime)
+	
 	if s.OnProgress != nil {
-		s.OnProgress(ProgressUpdate{IsRunning: true, StartTime: s.StartTime})
+		s.OnProgress(ProgressUpdate{IsRunning: true, StartTime: startTime})
 	}
 	defer func() {
-		s.scanMu.Lock()
-		s.IsRunning = false
-		s.scanMu.Unlock()
-		
+		s.isRunning.Store(false)
 		if s.OnProgress != nil {
 			s.OnProgress(ProgressUpdate{IsRunning: false})
 		}
@@ -79,7 +97,7 @@ func (s *Scanner) RunScan(basePath string) error {
 
 	// Clear current path if scan fails or finishes
 	defer func() {
-		s.CurrentPath = ""
+		s.currentPath.Store("")
 	}()
 
 	return s.startConcurrentScan(basePath, exclusions)
@@ -95,7 +113,7 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 	// Work management
 	work := make(chan string, 100000)
 	pending := sync.WaitGroup{}
-	numWorkers := 16 // Increased workers for modern systems
+	numWorkers := 16 
 	
 	// Stats tracking
 	var statsMu sync.Mutex
@@ -123,7 +141,6 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 				if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 					inode := stat.Ino
 					if _, seen := visitedInodes.LoadOrStore(inode, true); seen {
-						// Already visited this physical folder via another path
 						pending.Done()
 						continue
 					}
@@ -164,11 +181,8 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 					fullPath := filepath.Join(path, name)
 					if d.IsDir() {
 						pending.Add(1)
-						select {
-						case work <- fullPath:
-						default:
-							go func(p string) { work <- p }(fullPath)
-						}
+						// Standard blocking send to avoid goroutine explosion
+						work <- fullPath
 					} else {
 						finfo, err := d.Info()
 						if err != nil { continue }
@@ -181,8 +195,8 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 						
 						atomic.AddInt64(&totalSize, size)
 						atomic.AddInt64(&totalFiles, 1)
-						atomic.AddInt64(&s.FilesScanned, 1)
-						atomic.AddInt64(&s.BytesScanned, size)
+						s.filesScanned.Add(1)
+						s.bytesScanned.Add(size)
 						
 						dirSize += size
 						dirFiles++
@@ -201,13 +215,13 @@ func (s *Scanner) startConcurrentScan(basePath string, exclusions []string) erro
 				}
 				
 				if time.Since(lastReport) > 500*time.Millisecond && s.OnProgress != nil {
-					s.CurrentPath = path
+					s.currentPath.Store(path)
 					s.OnProgress(ProgressUpdate{
-						FilesScanned: atomic.LoadInt64(&s.FilesScanned),
-						BytesScanned: atomic.LoadInt64(&s.BytesScanned),
+						FilesScanned: s.filesScanned.Load(),
+						BytesScanned: s.bytesScanned.Load(),
 						CurrentPath:  path,
 						IsRunning:    true,
-						StartTime:    s.StartTime,
+						StartTime:    startTime,
 					})
 					lastReport = time.Now()
 				}
@@ -311,8 +325,9 @@ func (s *Scanner) saveSnapshot(totalSize int64, totalFiles int, durationMs int64
 	snapshotID, _ := res.LastInsertId()
 
 	// Optimized Batch Insert for Folders
-	folderQuery := "INSERT INTO folder_snapshots (snapshot_id, path, size_bytes, file_count) VALUES "
-	values := []interface{}{}
+	var folderQuery strings.Builder
+	folderQuery.WriteString("INSERT INTO folder_snapshots (snapshot_id, path, size_bytes, file_count) VALUES ")
+	values := make([]interface{}, 0, 800)
 	count := 0
 	
 	// Convert map to slice for stable iteration
@@ -322,27 +337,29 @@ func (s *Scanner) saveSnapshot(totalSize int64, totalFiles int, durationMs int64
 	}
 
 	for i, stat := range statsList {
-		folderQuery += "(?, ?, ?, ?)"
+		if count > 0 {
+			folderQuery.WriteString(", ")
+		}
+		folderQuery.WriteString("(?, ?, ?, ?)")
 		values = append(values, snapshotID, stat.Path, stat.SizeBytes, stat.FileCount)
 		count++
 
-		// SQLite batch limit is usually 999 parameters, we'll use 200 rows per batch (800 params)
 		if count >= 200 || i == len(statsList)-1 {
-			_, err = tx.Exec(folderQuery, values...)
+			_, err = tx.Exec(folderQuery.String(), values...)
 			if err != nil {
 				return fmt.Errorf("failed to batch insert folders: %w", err)
 			}
-			folderQuery = "INSERT INTO folder_snapshots (snapshot_id, path, size_bytes, file_count) VALUES "
-			values = []interface{}{}
+			folderQuery.Reset()
+			folderQuery.WriteString("INSERT INTO folder_snapshots (snapshot_id, path, size_bytes, file_count) VALUES ")
+			values = values[:0]
 			count = 0
-		} else {
-			folderQuery += ", "
 		}
 	}
 
 	// Batch insert top files
-	topQuery := "INSERT INTO top_files (snapshot_id, path, size_bytes, category) VALUES "
-	topValues := []interface{}{}
+	var topQuery strings.Builder
+	topQuery.WriteString("INSERT INTO top_files (snapshot_id, path, size_bytes, category) VALUES ")
+	topValues := make([]interface{}, 0, 800)
 	count = 0
 	
 	allTopFiles := []models.TopFileResult{}
@@ -351,20 +368,22 @@ func (s *Scanner) saveSnapshot(totalSize int64, totalFiles int, durationMs int64
 	}
 
 	for i, f := range allTopFiles {
-		topQuery += "(?, ?, ?, ?)"
+		if count > 0 {
+			topQuery.WriteString(", ")
+		}
+		topQuery.WriteString("(?, ?, ?, ?)")
 		topValues = append(topValues, snapshotID, f.Path, f.SizeBytes, f.Category)
 		count++
 
 		if count >= 200 || i == len(allTopFiles)-1 {
-			_, err = tx.Exec(topQuery, topValues...)
+			_, err = tx.Exec(topQuery.String(), topValues...)
 			if err != nil {
 				return fmt.Errorf("failed to batch insert top files: %w", err)
 			}
-			topQuery = "INSERT INTO top_files (snapshot_id, path, size_bytes, category) VALUES "
-			topValues = []interface{}{}
+			topQuery.Reset()
+			topQuery.WriteString("INSERT INTO top_files (snapshot_id, path, size_bytes, category) VALUES ")
+			topValues = topValues[:0]
 			count = 0
-		} else {
-			topQuery += ", "
 		}
 	}
 

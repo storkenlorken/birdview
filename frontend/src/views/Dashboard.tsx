@@ -19,8 +19,15 @@ export function Dashboard() {
   const [viewSnapshotId, setViewSnapshotId] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const { data, isLoading, isStarting, startScan } = useStats(viewSnapshotId);
+  const { data, isLoading, isStarting, startScan, refetch } = useStats(viewSnapshotId);
   const liveUpdate = useEvents();
+
+  // Re-fetch stats immediately when a live scan finishes to get the final snapshot
+  useEffect(() => {
+    if (liveUpdate && !liveUpdate.isRunning && !viewSnapshotId) {
+      refetch();
+    }
+  }, [liveUpdate?.isRunning, viewSnapshotId, refetch]);
 
   // Determine if we should show live progress
   const isScanning = liveUpdate?.isRunning ?? data?.isScanning;

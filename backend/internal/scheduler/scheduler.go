@@ -48,9 +48,23 @@ func (s *Scheduler) GetDataPathError() string {
 	return s.dataPathError
 }
 
+func (s *Scheduler) GetInterval() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.interval
+}
+
+func (s *Scheduler) GetDataPath() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.dataPath
+}
+
 func (s *Scheduler) Start(interval time.Duration, dataPath string) {
+	s.mu.Lock()
 	s.interval = interval
 	s.dataPath = dataPath
+	s.mu.Unlock()
 
 	go func() {
 		// 1. Calculate the actual time remaining until the next scan
@@ -59,12 +73,16 @@ func (s *Scheduler) Start(interval time.Duration, dataPath string) {
 
 		initialDelay := time.Duration(0)
 		if err == nil {
+			s.mu.RLock()
+			currentInterval := s.interval
+			s.mu.RUnlock()
+			
 			timeSinceLastScan := time.Since(lastSnapshot.Timestamp)
-			if timeSinceLastScan < s.interval {
-				initialDelay = s.interval - timeSinceLastScan
+			if timeSinceLastScan < currentInterval {
+				initialDelay = currentInterval - timeSinceLastScan
 				log.Printf("Last scan was %v ago. Next scheduled scan in %v.", timeSinceLastScan.Round(time.Minute), initialDelay.Round(time.Minute))
 			} else {
-				log.Printf("Last scan was %v ago (> %v). Starting immediate scan.", timeSinceLastScan.Round(time.Minute), s.interval)
+				log.Printf("Last scan was %v ago (> %v). Starting immediate scan.", timeSinceLastScan.Round(time.Minute), currentInterval)
 			}
 		}
 
@@ -83,7 +101,10 @@ func (s *Scheduler) Start(interval time.Duration, dataPath string) {
 		}
 
 		// 3. Main Loop
-		s.ticker = time.NewTicker(s.interval)
+		s.mu.RLock()
+		tickerInterval := s.interval
+		s.mu.RUnlock()
+		s.ticker = time.NewTicker(tickerInterval)
 		
 		// Run first scan immediately if we didn't wait (or after delay)
 		s.runScheduledScan()
@@ -104,7 +125,13 @@ func (s *Scheduler) Start(interval time.Duration, dataPath string) {
 
 func (s *Scheduler) runScheduledScan() {
 	log.Println("Starting scheduled scan...")
-	if err := validateDataPath(s.dataPath); err != nil {
+	
+	s.mu.RLock()
+	dataPath := s.dataPath
+	interval := s.interval
+	s.mu.RUnlock()
+
+	if err := validateDataPath(dataPath); err != nil {
 		s.mu.Lock()
 		s.dataPathError = err.Error()
 		s.mu.Unlock()
@@ -114,7 +141,7 @@ func (s *Scheduler) runScheduledScan() {
 		s.dataPathError = ""
 		s.mu.Unlock()
 		
-		if err := s.scanner.RunScan(s.dataPath); err != nil {
+		if err := s.scanner.RunScan(dataPath); err != nil {
 			log.Printf("Scheduled scan failed: %v", err)
 		} else {
 			log.Println("Scheduled scan completed successfully.")
@@ -122,19 +149,21 @@ func (s *Scheduler) runScheduledScan() {
 	}
 	
 	s.mu.Lock()
-	s.nextScanTime = time.Now().Add(s.interval)
+	s.nextScanTime = time.Now().Add(interval)
 	s.mu.Unlock()
 }
 
 func (s *Scheduler) UpdateInterval(interval time.Duration) {
 	log.Printf("Updating scan interval to %v", interval)
+	
+	s.mu.Lock()
 	s.interval = interval
+	s.nextScanTime = time.Now().Add(interval)
+	s.mu.Unlock()
+
 	if s.ticker != nil {
 		s.ticker.Reset(interval)
 	}
-	s.mu.Lock()
-	s.nextScanTime = time.Now().Add(interval)
-	s.mu.Unlock()
 }
 
 func (s *Scheduler) Stop() {

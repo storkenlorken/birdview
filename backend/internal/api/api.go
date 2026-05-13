@@ -161,16 +161,18 @@ func (a *API) getStats(w http.ResponseWriter, r *http.Request) {
 		a.db.Select(&categories, "SELECT * FROM category_snapshots WHERE snapshot_id = ?", snapshot.ID)
 	}
 
+	status := a.scanner.GetStatus()
+
 	response := map[string]interface{}{
 		"snapshot":      nil,
 		"folders":       folders,
 		"topFiles":      topFiles,
 		"categories":    categories,
-		"isScanning":    a.scanner.IsRunning,
-		"filesScanned":  a.scanner.FilesScanned,
-		"bytesScanned":  a.scanner.BytesScanned,
-		"currentPath":   a.scanner.CurrentPath,
-		"startTime":     a.scanner.StartTime,
+		"isScanning":    status.IsRunning,
+		"filesScanned":  status.FilesScanned,
+		"bytesScanned":  status.BytesScanned,
+		"currentPath":   status.CurrentPath,
+		"startTime":     status.StartTime,
 		"nextScanTime":  a.scheduler.GetNextScanTime(),
 		"dataPathError": a.scheduler.GetDataPathError(),
 		"version":       a.version,
@@ -244,7 +246,7 @@ func (a *API) deleteSnapshot(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) startScan(w http.ResponseWriter, r *http.Request) {
-	if a.scanner.IsRunning {
+	if a.scanner.GetStatus().IsRunning {
 		http.Error(w, "Scan already in progress", http.StatusConflict)
 		return
 	}
@@ -314,15 +316,9 @@ func (a *API) getEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send initial state
-	if a.scanner.IsRunning {
-		initial := scanner.ProgressUpdate{
-			FilesScanned: a.scanner.FilesScanned,
-			BytesScanned: a.scanner.BytesScanned,
-			CurrentPath:  a.scanner.CurrentPath,
-			IsRunning:    true,
-			StartTime:    a.scanner.StartTime,
-		}
-		data, _ := json.Marshal(initial)
+	status := a.scanner.GetStatus()
+	if status.IsRunning {
+		data, _ := json.Marshal(status)
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		flusher.Flush()
 	}
