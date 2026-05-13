@@ -5,15 +5,25 @@ BirdView is a snappy, macOS-inspired dashboard that helps you hunt down space-ho
 
 ![BirdView Dashboard](https://raw.githubusercontent.com/storkenlorken/birdview/main/screenshots/dashboard.png)
 
-## Why you'll love it
-*   **Fast as heck**: Written in Go, so it rips through millions of files in a few minutes.
-*   **Eye Candy**: A beautiful frosted glass UI that actually looks good.
-*   **Time Travel**: See exactly how much your "Backups" folder grew since last month.
-*   **No Mess**: Just one Docker container. No complex setup, no external databases.
+*   Written in Go, so it rips through millions of files in a few minutes.
+*   A nice frosted glass UI that looks pretty good.
+*   See exactly how much your "Backups" folder grew since last month.
+*   Just one Docker container. No complex setup, no external databases.
 
 ## Get it running
 
-### Unraid (The easy way)
+### Docker (current method)
+```bash
+docker run -d \
+  --name birdview \
+  -p 8080:8080 \
+  -v /mnt/user:/data:ro \
+  -v birdview_data:/app/data \
+  --restart always \
+  storken/birdview
+```
+
+### Unraid (comming soon I hope)
 1. Head to the **Apps** tab.
 2. Search for `BirdView`.
 3. Hit **Install** and you're done!
@@ -38,10 +48,8 @@ BirdView doesn't just look at extensions; it's a bit smarter than that. It uses 
     *   **Other**: Anything that doesn't fit the above!
 
 ### Docker Compose
-Just copy this into your `docker-compose.yml`:
 
 ```yaml
-version: '3.8'
 services:
   birdview:
     image: storken/birdview
